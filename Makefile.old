@@ -1,5 +1,5 @@
 ifndef TARGET
-$(info Target is not set; do `TARGET={dir}` to set the compilation route.)
+	$(info Target is not set; do `TARGET={dir}` to set the compilation route.)
 endif
 
 CC=avr-gcc
