@@ -9,11 +9,21 @@ set (CMAKE_SYSTEM_NAME Generic)
 set (CMAKE_SYSTEM_PROCESSOR avr)
 
 macro (new_board)
+    include_directories ("${PROJECT_SOURCE_DIR}/../../lib/")
     set (elf_file ${CMAKE_PROJECT_NAME}.elf)
     set (hex_file ${CMAKE_PROJECT_NAME}.hex)
     set (map_file ${CMAKE_PROJECT_NAME}.map)
 
     file(GLOB srcs *.c)
+
+    # Add the necessary source files for all libraries required
+    foreach (avr_lib ${ARGN})
+        set (srcs ${srcs} ${PROJECT_SOURCE_DIR}/../../lib/${avr_lib}.c ${PROJECT_SOURCE_DIR}/../../lib/${avr_lib}.h)
+    endforeach (avr_lib ${ARGN})
+
+    message( STATUS "Sources: ${srcs}" )
+
+
     add_executable (${CMAKE_PROJECT_NAME} ${srcs})
 
     #add_executable (${CMAKE_PROJECT_NAME} main.c)
@@ -29,7 +39,7 @@ macro (new_board)
     add_custom_target (
         flash
         sudo ${AVRDUDE} -p ${MCU} -v -c ${PROGRAMMER} -P ${PORT} -U flash:w:"${CMAKE_PROJECT_NAME}.hex"
-        DEPENDS hex_${CMAKE_PROJECT_NAME}
+        DEPENDS hex
         COMMENT "Flashing ${CMAKE_PROJECT_NAME}.hex"
         )
 
@@ -53,13 +63,3 @@ macro (new_board)
 
 endmacro (new_board)
 
-macro (add_avrlibrary LIBRARY_NAME)
-    include_directories ("${PROJECT_SOURCE_DIR}/../../lib/")
-    link_directories ("${PROJECT_SOURCE_DIR}/../../lib/")
-    add_subdirectory ("${PROJECT_SOURCE_DIR}/../../lib/")
-
-    set (EXTRA_LIBS ${EXTRA_LIBS} ${LIBRARY_NAME} )
-    message(STATUS "Building with Libraries: ${EXTRA_LIBS}")
-
-    target_link_libraries (${CMAKE_PROJECT_NAME} ${EXTRA_LIBS})
-endmacro(add_avrlibrary)
