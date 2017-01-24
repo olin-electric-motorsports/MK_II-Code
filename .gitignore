@@ -34,3 +34,6 @@ obj/
 # Debug files
 *.dSYM/
 *.su
+
+# For the VIM Users
+*.swp

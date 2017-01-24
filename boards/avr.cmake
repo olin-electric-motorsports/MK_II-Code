@@ -13,10 +13,10 @@ macro (new_board)
     set (hex_file ${CMAKE_PROJECT_NAME}.hex)
     set (map_file ${CMAKE_PROJECT_NAME}.map)
 
-    #file(GLOB srcs *.c)
-    #add_executable (${CMAKE_PROJECT_NAME} ${srcs})
+    file(GLOB srcs *.c)
+    add_executable (${CMAKE_PROJECT_NAME} ${srcs})
 
-    add_executable (${CMAKE_PROJECT_NAME} main.c)
+    #add_executable (${CMAKE_PROJECT_NAME} main.c)
     set (CMAKE_C_FLAGS "-mmcu=${MCU} -g -Os -Wall -Wunused -Wl,-Map=${map_file} -lm")
     set_target_properties (${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${elf_file})
 
@@ -52,3 +52,14 @@ macro (new_board)
     endif((DEFINED L_FUSE) AND (DEFINED H_FUSE))
 
 endmacro (new_board)
+
+macro (add_avrlibrary LIBRARY_NAME)
+    include_directories ("${PROJECT_SOURCE_DIR}/../../lib/")
+    link_directories ("${PROJECT_SOURCE_DIR}/../../lib/")
+    add_subdirectory ("${PROJECT_SOURCE_DIR}/../../lib/")
+
+    set (EXTRA_LIBS ${EXTRA_LIBS} ${LIBRARY_NAME} )
+    message(STATUS "Building with Libraries: ${EXTRA_LIBS}")
+
+    target_link_libraries (${CMAKE_PROJECT_NAME} ${EXTRA_LIBS})
+endmacro(add_avrlibrary)

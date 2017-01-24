@@ -19,13 +19,13 @@ Once this step is complete, each folder in the `boards/` directory will contain 
 
 ### A Quick Example
 
-I enjoy learning by example, so let us run through a scenario where I want to flash code for the `Hackerboard` onto my personal Hackerboard. 
+I enjoy learning by example, so let us run through a scenario where I want to flash code for `Blinky` onto my personal Hackerboard. (Of course first verifying that the correct LEDs are being blinked!)
 
 ```bash
 $ git clone https://github.com/olin-electric-motorsports/MK_II-Code.git
 $ cd MK_II-Code/
 $ ./setup.sh # If this doesn't work you can also just use `bash setup.sh`
-$ cd boards/Hackerboard/build
+$ cd boards/Blinky/build
 $ make flash
 ```
 

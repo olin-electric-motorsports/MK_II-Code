@@ -18,7 +18,9 @@ do
 
         cmake -D CMAKE_C_COMPILER=avr-gcc .. # Run cmake out-of-source
     else
-        echo "Build directory already exists for $DIRECTORY. Please \`rm -r $DIRECTORY/build\` if you wish to do a fresh build"
+        echo "Build directory already exists for $DIRECTORY. Please \`rm -r $DIRECTORY/build\` if you wish to do a fresh build. This will just update the build for now."
+        cd build
+        cmake -D CMAKE_C_COMPILER=avr-gcc .. # Run cmake out-of-source
     fi
 
     cd $root_dir
