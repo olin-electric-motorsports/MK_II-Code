@@ -11,6 +11,7 @@ int main (void) {
         // Toggle PE1 (pin 10)
         // Toggles power to pin 10 to create a "blink"
         PORTE ^= _BV(PE1);
+        
 
         // Give a delay to the toggle so it doesn't infinitely toggle
         _delay_ms(500);
