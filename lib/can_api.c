@@ -27,11 +27,14 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     */
 
     // New CAN settings
-    CANBT1 = 0x06;
+    // CANBT1 = 0x06;
     //CANBT2 = 0x0E;
     //CANBT3 = 0x7E;
-    CANBT2 = 0x06;
-    CANBT3 = 0xBE;
+    //CANBT2 = 0x06;
+    //CANBT3 = 0xBE;
+    CANBT1 = 0x00;
+    CANBT2 = 0x04;
+    CANBT3 = 0x12;
 
     //0x06    0x06    0xbe
 

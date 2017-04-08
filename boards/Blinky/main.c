@@ -12,9 +12,7 @@ int main (void) {
     while(1) {
         // Toggle PE1 (pin 10)
         // Toggles power to pin 10 to create a "blink"
-        PORTD ^= _BV(PD6);
-        _delay_ms(1000);
-        PORTD ^= _BV(PD7);
+        PORTE ^= _BV(PE1);
 
         // Give a delay to the toggle so it doesn't infinitely toggle
         _delay_ms(500);
