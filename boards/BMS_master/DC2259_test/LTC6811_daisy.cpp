@@ -620,7 +620,6 @@ int8_t ltc6811_rdaux(uint8_t reg, //Determines which GPIO voltage register is re
                     )
 {
 
-
   const uint8_t NUM_RX_BYT = 8;
   const uint8_t BYT_IN_REG = 6;
   const uint8_t GPIO_IN_REG = 3;
@@ -760,7 +759,7 @@ void ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register is 
   cmd[3] = (uint8_t)(cmd_pec);
 
 
-  //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake, this command can be removed.
+  wakeup_idle(total_ic); //This will guarantee that the ltc6811 isoSPI port is awake, this command can be removed.
 
   output_low(LTC6811_CS);
   spi_write_read(cmd,4,data,(REG_LEN*total_ic));
@@ -1332,7 +1331,7 @@ void ltc6811_wrcomm(uint8_t total_ic, //The number of ICs being written to
     cmd_index = cmd_index + 2;
   }
 
-  //wakeup_idle ();                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
+  wakeup_idle(total_ic);                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
   output_low(LTC6811_CS);
   spi_write_array(CMD_LEN, cmd);
   output_high(LTC6811_CS);

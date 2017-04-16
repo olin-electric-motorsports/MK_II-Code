@@ -91,7 +91,7 @@ char get_char();
   configure the software.
 
 ***********************************************************/
-const uint8_t TOTAL_IC = 1;//!<number of ICs in the daisy chain
+const uint8_t TOTAL_IC = 2;//!<number of ICs in the daisy chain
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
