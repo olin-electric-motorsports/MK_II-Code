@@ -72,6 +72,8 @@ Copyright 2015 Linear Technology Corp. (LTC)
 #include "LTC6811_daisy.h"
 #include "eeprom.h"
 #include <SPI.h>
+#include "i2c.h"
+#include "mux_control.h"
 
 #define ENABLED 1
 #define DISABLED 0
@@ -185,6 +187,12 @@ uint8_t rx_cfg[TOTAL_IC][8];
 uint8_t tx_pdat[4] = {0xAA,0x02,0x03,0x55};
 uint8_t rx_pdat[4];
 uint8_t pdat_len = 4;
+
+
+//MUX variables
+uint8_t cell_channel = 0; //0-7 
+uint8_t mux1_address = 0x49;
+uint8_t mux2_address = 0x48;
 
 
 
@@ -494,7 +502,7 @@ void run_command(uint32_t cmd)
        pdat_len = 4;
        wakeup_sleep(10);
        write_eeprom(0, tx_pdat,pdat_len); //(address, data, length)
-       delay(1000);
+       delay(100);
        read_eeprom(0,  rx_pdat,pdat_len);
 
        Serial.println("Transmitted Data");
@@ -513,10 +521,115 @@ void run_command(uint32_t cmd)
        Serial.println();
     break;
 
-    case 20: //write I2C
-      //write_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
-      //write_i2c(total_ic, 0x48, 
+    case 20: //write eeprom
+       tx_pdat[0] = 0x11;
+       tx_pdat[1] = 0x12;
+       tx_pdat[2] = 0x13;
+       tx_pdat[3] = 0x14;
+       pdat_len = 4;
+       wakeup_sleep(TOTAL_IC);
+       write_eeprom(0, tx_pdat,pdat_len); //(address, data, length)
+
+       Serial.println("Transmitted Data");
+       for(uint8_t i = 0; i<pdat_len;i++)
+       {
+          Serial.print(tx_pdat[i],HEX);
+          Serial.print(", ");
+       }
+       Serial.println();
+    break;
+
+    case 21: //read eeprom
+        pdat_len = 4;
+        wakeup_sleep(TOTAL_IC);
+        read_eeprom(0,  rx_pdat,pdat_len);
+
+        Serial.println("Received Data");
+       for(uint8_t i = 0; i<pdat_len;i++)
+       {
+          Serial.print(rx_pdat[i],HEX);
+          Serial.print(", ");
+       }
+       Serial.println();
+    break;
+      
+    case 22: //disable muxes
+          wakeup_sleep(TOTAL_IC);
+          ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+          mux_disable(TOTAL_IC, mux2_address); //disable mux 2
+          mux_disable(TOTAL_IC, mux1_address); //disable mux 1
+          Serial.println("Disable MUXs");
+          delay(1000);
+        break;
+
+    case 23: //set muxes to mux 1 channel 0
+      wakeup_sleep(TOTAL_IC);
+      ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+      mux_disable(TOTAL_IC, mux2_address); //disable other mux
+      set_mux_channel(TOTAL_IC, mux1_address, 0); 
+      Serial.println("Mux 1, Channel 0");
+      
+      ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+      ltc6811_pollAdc();
+      Serial.println(F("aux conversion completed"));
+      Serial.println();
+      
+      error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
+      check_error(error);
+      print_aux();
+
+      ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+      mux_disable(TOTAL_IC, mux1_address); //disable other mux
+      set_mux_channel(TOTAL_IC, mux2_address, 0); 
+      Serial.println("Mux 2, Channel 0");
+
+      ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+      ltc6811_pollAdc();
+      Serial.println(F("aux conversion completed"));
+      Serial.println();
+      
+      error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
+      check_error(error);
+      print_aux();
+      
+      break;
+
+    case 24: //set muxes to mux 1 channel 2
+      wakeup_sleep(TOTAL_IC);
+      ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+      mux_disable(TOTAL_IC, mux2_address); //disable other mux
+      //set_mux_channel(TOTAL_IC, mux1_address, 7);
+      set_mux_channel(TOTAL_IC, mux1_address, 3); 
+      Serial.println("Mux 1, Channel 2");
+      break;
+
+    case 25: //set muxes to mux 1 channel 2
+      for(uint8_t i=0;i<100;i++) {
+        wakeup_sleep(TOTAL_IC);
+        ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+        mux_disable(TOTAL_IC, mux2_address); //disable other mux
+        set_mux_channel(TOTAL_IC, mux1_address, 0); 
+        Serial.println("Mux 1, Channel 0");
+        delay(800);
+
+        wakeup_sleep(TOTAL_IC);
+        ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+        mux_disable(TOTAL_IC, mux1_address); 
+        Serial.println("Mux 1, Dissable");
+        delay(800);
+
+        wakeup_sleep(TOTAL_IC);
+        ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+        set_mux_channel(TOTAL_IC, mux1_address, 3); 
+  
+        Serial.println("Mux 1, Channel 2");
+        delay(3000);
+          
+      }
+  
+      break;
     
+     
     case 'm':
       print_menu();
       break;
@@ -563,7 +676,10 @@ void print_menu()
   Serial.println(F("Read Stat Voltages: 8             | Run ADC overlap Test: 17"));
   Serial.println(F("loop cell voltages: 9             | Run digital Redundancy Test: 18"));
   Serial.println(F("                                  | Write/Read EEprom: 19"));
-  Serial.println(F("                                  | Write I2C message: 20"));
+  Serial.println(F("                                  | Write EEprom: 20"));
+  Serial.println(F("                                  | Read EEprom: 21"));
+  Serial.println(F("                                  | Set MUX to cell 1 temp: 22"));
+  Serial.println(F("                                  | Set MUX to cell 2 temp: 23"));
   Serial.println();
   Serial.println(F("Please enter command: "));
   Serial.println();

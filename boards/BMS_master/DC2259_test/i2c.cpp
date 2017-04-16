@@ -3,39 +3,31 @@
 #include "Linduino.h"
 #include "LT_SPI.h"
 #include "LTC6811_daisy.h"
-#include <SPI.h>
-#include "eeprom.h"
+#include "i2c.h"
 
-void write_eeprom(uint8_t memory_address, uint8_t *tx_data, uint8_t data_len)
-{
-	uint8_t control_code = 0xA0;
-	uint8_t control_byte = control_code | 0x00;
-	
-	write_i2c_eeprom(1 , memory_address, control_byte, tx_data, data_len);
-}
-void read_eeprom(uint8_t memory_address, uint8_t *rx_data, uint8_t data_len)
-{
-	uint8_t control_code = 0xA0;
-	uint8_t control_byte = control_code | 0x00;
-	read_i2c_eeprom(1 , memory_address, control_byte, rx_data,  data_len);
-}
 
-void write_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
+void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
 {
+  Serial.println("In write_i2c.");
   uint8_t START = 0x60;
+  uint8_t STOP = 0x01;
   uint8_t ACK = 0x00;
   uint8_t NACK = 0x08;
   uint8_t BLANK = 0x00;
   uint8_t NO_TRANSMIT = 0x70;
   uint8_t NACK_STOP = 0x09;
 
+
   uint8_t loop_count;
-  uint8_t transmitted_bytes =0;
-  uint8_t remainder=0;
+  uint8_t remainder = 0;
+  uint8_t transmitted_bytes = 0;
   uint8_t data_counter = 0;
   uint8_t comm[1][6];
-
-  if (((data_len)%3)==0){loop_count = ((data_len)/3);}
+  uint8_t rx_comm[1][8];
+  if (((data_len)%3) == 0)
+  {
+    loop_count = ((data_len)/3);
+  }
   else
   {
     loop_count = ((data_len)/3);
@@ -43,26 +35,45 @@ void write_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, uint
     loop_count++;
   }
 
+  address = address << 1; // convert 7 bit address to 8 bits
+
   comm[0][0] = START;//NO_TRANSMIT; //
   comm[0][1] = NACK_STOP;//BLANK ; //
-  comm[0][2] = START + (command >> 4); //
-  comm[0][3] = (command<<4) + NACK ; //
-  comm[0][4] = BLANK + (address >>4);
-  comm[0][5] = (address<<4) + NACK;
+  comm[0][2] = START | (address >> 4); //
+  comm[0][3] = (address<<4) | NACK ; //
+  comm[0][4] = BLANK | (command >>4);
+  comm[0][5] = (command<<4) | NACK;
 
-  Serial.print("write setup comm:  ");
-  for(int i=0; i<sizeof(comm[0]); i++){
-    Serial.print(comm[0][i],BIN);
+  if (loop_count == 0) { // if there is no data, free up the bus
+    comm[0][5] = (command<<4) | NACK_STOP;
+    Serial.println("Adding NACK_STOP since there is no data");
+  }
+
+  Serial.print("comm: ");
+  for(uint8_t i=0; i < 6; i++){
+    Serial.print(comm[0][i],HEX);
     Serial.print(", ");
   }
-  Serial.println(" "); 
-  ltc6811_wrcomm(1,comm);
+  Serial.println();
+
+
+  ltc6811_wrcomm(total_ic,comm);
   ltc6811_stcomm();
+  ltc6811_rdcomm(total_ic,rx_comm);
+
+  Serial.print("rx_comm: ");
+  for(uint8_t i=0; i < 6; i++){
+    Serial.print(rx_comm[0][i],HEX);
+    Serial.print(", ");
+  }
+  Serial.println();
+
+  Serial.println("sent command");
 
   transmitted_bytes = 0;
-  for (uint8_t i =0; i<loop_count; i++)
+  for (uint8_t i=0; i<loop_count; i++)
   {
-    if ((i == (loop_count-1)) && (remainder != 0))
+    if ((i == (loop_count-1)) && (remainder != 0)) //need to pad becuase we don't have multiple of 3 data bytes
     {
       for (uint8_t k=0; k<remainder; k++)
       {
@@ -78,23 +89,17 @@ void write_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, uint
         comm[0][transmitted_bytes+1] =  BLANK ; //
         transmitted_bytes = transmitted_bytes + 2;
       }
-      Serial.print("write data comm:  ");
-      for(int i=0; i<sizeof(comm[0]); i++){
-        Serial.print(comm[0][i],BIN);
-        Serial.print(", ");
-      }
-      Serial.println(" "); 
       ltc6811_wrcomm(1,comm);
       ltc6811_stcomm();
     }
-    else
+    else                                      //don't need to pad because we have a multiple of 3 data bytes
     {
       for (uint8_t k=0; k<3; k++)
       {
         comm[0][k*2] = BLANK + (data[data_counter] >> 4); //
         if (k!=2){comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK ;} //
         else if(remainder!=0){ comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK ;}
-		else { comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK_STOP ;}
+		    else { comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK_STOP ;}
         data_counter++;
       }
       ltc6811_wrcomm(1,comm);
@@ -104,7 +109,7 @@ void write_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, uint
   
 }
 
-uint8_t read_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
+uint8_t read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
 {
   uint8_t START = 0x60;
   uint8_t ACK = 0x00;
@@ -132,20 +137,15 @@ uint8_t read_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, ui
     loop_count++;
   }
 
-  comm[0][0] = START + (command >> 4); //
-  comm[0][1] = ((command)<<4) + NACK ; //
-  comm[0][2] = BLANK + (address >>4);
-  comm[0][3] = (address<<4) + NACK;
-  comm[0][4] = START + (command >> 4); //
-  comm[0][5] = (command<<4) + 0x10 + ACK ; //
+  address = address << 1; //convert 7 bit address to 8 bits
 
-   Serial.print("read setup comm:  ");
-  for(int i=0; i<sizeof(comm[0]); i++){
-    Serial.print(comm[0][i],BIN);
-    Serial.print(", ");
-  }
-  Serial.println(" "); 
-  Serial.println(" "); 
+  comm[0][0] = START + (address >> 4); //
+  comm[0][1] = ((address)<<4) + NACK ; //
+  comm[0][2] = BLANK + (command >>4);
+  comm[0][3] = (command<<4) + NACK;
+  comm[0][4] = START + (address >> 4); //
+  comm[0][5] = (address<<4) + 0x10 + ACK ; //
+
   ltc6811_wrcomm(total_ic,comm);
   ltc6811_rdcomm(total_ic,rx_comm);
   ltc6811_stcomm();
@@ -169,13 +169,6 @@ uint8_t read_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, ui
         transmitted_bytes = transmitted_bytes + 2;
       }
 
-      Serial.print("read data comm:  ");
-      for(int i=0; i<sizeof(comm[0]); i++){
-        Serial.print(comm[0][i],BIN);
-        Serial.print(", ");
-      }
-      Serial.println(" "); 
-      Serial.println(" "); 
       ltc6811_wrcomm(1,comm);
       ltc6811_stcomm();
       ltc6811_rdcomm(1,rx_comm);
@@ -195,8 +188,8 @@ uint8_t read_i2c_eeprom( uint8_t total_ic , uint8_t address, uint8_t command, ui
         comm[0][(k*2)] = BLANK + 0x0F; //
         if (k!=2)comm[0][(k*2)+1] = 0xF0 + ACK ; //
         else if(remainder!=0){ comm[0][(k*2)+1] = 0xF0 | ACK ;}
-		else { comm[0][(k*2)+1] = 0xF0 | NACK_STOP ;}
-		data_counter++;
+    else { comm[0][(k*2)+1] = 0xF0 | NACK_STOP ;}
+    data_counter++;
       }
       ltc6811_wrcomm(1,comm);
       ltc6811_stcomm();
