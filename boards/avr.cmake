@@ -51,15 +51,14 @@ macro (new_board)
             COMMENT "Get fuses from ${MCU}"
         )
     
-    if((DEFINED L_FUSE) AND (DEFINED H_FUSE))
+    if( DEFINED L_FUSE )
         add_custom_target (
             set_fuses
             sudo ${AVRDUDE} -p ${MCU} -c ${PROGRAMMER} -P ${PORT}
                 -U lfuse:w:${L_FUSE}:m
-                -U hfuse:w:${H_FUSE}:m
-                COMMENT "Setup:\n High Fuse: ${H_FUSE}\n Low Fuse: ${L_FUSE}"
+                COMMENT "Setup:\n Low Fuse: ${L_FUSE}"
             )
-    endif((DEFINED L_FUSE) AND (DEFINED H_FUSE))
+    endif( DEFINED L_FUSE )
 
 endmacro (new_board)
 
