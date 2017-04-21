@@ -22,7 +22,10 @@ ISR(CAN_INT_vect)
 }
 
 int main (void) {
-    DDRB |= _BV(PB5);
+    DDRB |= _BV(PB5) | _BV(PB2);
+
+    //Write shutdown control high
+    PORTB |= _BV(PB2);
 
     //PWM init
     //Output compare pin is OC1B, so we need OCR1B as our counter
@@ -39,15 +42,12 @@ int main (void) {
     // Tell the CAN system to wait for a message.
     //CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
 
-    // while(1) {
-    //     // Wait indefinitely for a message to come.
-    //     if(flag) {
-    //         PORTB |= _BV(PB5);
-    //         _delay_ms(200);
-    //         PORTB &= ~_BV(PB5);
-    //         flag = 0x00;
-    //     }
-    // }
+    while(1) {
+        // Wait indefinitely for a message to come.
+        PORTB ^= _BV(PB5);
+        _delay_ms(200);
+    }
+
 }
 
 //Pin is PC1A
