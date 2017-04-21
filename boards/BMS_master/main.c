@@ -22,7 +22,10 @@ ISR(CAN_INT_vect)
 }
 
 int main (void) {
-    DDRB |= _BV(PB5);
+    DDRB |= _BV(PB5) | _BV(PB2);
+
+    //Write shutdown control high
+    PORTB |= _BV(PB2);
 
     //PWM init
     //Output compare pin is OC1B, so we need OCR1B as our counter
@@ -42,12 +45,8 @@ int main (void) {
 
     while(1) {
         // Wait indefinitely for a message to come.
-        if(flag) {
-            PORTB |= _BV(PB5);
-            _delay_ms(200);
-            PORTB &= ~_BV(PB5);
-            flag = 0x00;
-        }
+        PORTB ^= _BV(PB5);
+        _delay_ms(200);
     }
 }
 
