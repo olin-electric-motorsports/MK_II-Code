@@ -26,29 +26,28 @@ int main (void) {
 
     //PWM init
     //Output compare pin is OC1B, so we need OCR1B as our counter
-    TCCR0B |= _BV(CS00); //Clock prescale set to max speed
-    TCCR0A |= _BV(COM1B1) | _BV(WGM00); //Enable the right pwm compare and mode
-    TCCR0A &= ~_BV(COM0B1); //Make sure other PWM is off
+    TCCR1B |= _BV(CS10); //Clock prescale set to max speed
+    TCCR1A |= _BV(COM1B1) | _BV(WGM00); //Enable the right pwm compare and mode
+    TCCR1A &= ~_BV(COM1B0); //Make sure other PWM is off
     DDRC |= _BV(PC1); //Enable
 
-    OCR1B = (uint8_t) 0x04; //Set counter to a random value?
-
+    OCR1B = (uint8_t) 0; //Set counter to a random value?
 
     // Initialize CAN
-    CAN_init(0, 0);
+    //CAN_init(0, 0);
 
     // Tell the CAN system to wait for a message.
-    CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
+    //CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
 
-    while(1) {
-        // Wait indefinitely for a message to come.
-        if(flag) {
-            PORTB |= _BV(PB5);
-            _delay_ms(200);
-            PORTB &= ~_BV(PB5);
-            flag = 0x00;
-        }
-    }
+    // while(1) {
+    //     // Wait indefinitely for a message to come.
+    //     if(flag) {
+    //         PORTB |= _BV(PB5);
+    //         _delay_ms(200);
+    //         PORTB &= ~_BV(PB5);
+    //         flag = 0x00;
+    //     }
+    // }
 }
 
 //Pin is PC1A
