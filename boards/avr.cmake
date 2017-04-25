@@ -38,24 +38,21 @@ macro (new_board)
 
     add_custom_target (
         flash
-        sudo ${AVRDUDE} -p ${MCU} -v -c ${PROGRAMMER} -P ${PORT} -U flash:w:"${CMAKE_PROJECT_NAME}.hex"
+        sudo ${AVRDUDE} -p ${MCU} -v -c ${PROGRAMMER} -P ${PORT} -B5 -U flash:w:"${CMAKE_PROJECT_NAME}.hex"
         DEPENDS hex
         COMMENT "Flashing ${CMAKE_PROJECT_NAME}.hex"
         )
 
     add_custom_target (
         get_fuses
-        sudo ${AVRDUDE} -p ${MCU} -c ${PROGRAMMER} -P ${PORT} -n
-            -U lfuse:r:-:b
-            -U hfuse:r:-:b
+        sudo ${AVRDUDE} -p ${MCU} -c ${PROGRAMMER} -P ${PORT} -n -U lfuse:r:-:b -U hfuse:r:-:b
             COMMENT "Get fuses from ${MCU}"
         )
     
     if( DEFINED L_FUSE )
         add_custom_target (
             set_fuses
-            sudo ${AVRDUDE} -p ${MCU} -c ${PROGRAMMER} -P ${PORT}
-                -U lfuse:w:${L_FUSE}:m
+            sudo ${AVRDUDE} -p ${MCU} -c ${PROGRAMMER} -P ${PORT} -U lfuse:w:${L_FUSE}:m
                 COMMENT "Setup:\n Low Fuse: ${L_FUSE}"
             )
     endif( DEFINED L_FUSE )
