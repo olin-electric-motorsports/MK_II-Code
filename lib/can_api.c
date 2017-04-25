@@ -15,25 +15,16 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     CANTCON = 0x00; 
 
     // Set BAUD rate
-    /*
-    CANBT1 = 0x01; // Set BAUD rate to 500kb CANBT2 = 0x04; // Re-synch handling
-    CANBT3 = 0x13; // Phase edge error handling
-    */
-    // Old CAN settings
-    /*
-        CANBT1 = 0x06;
-        CANBT2 = 0x0C;
-        CANBT3 = 0x37;
+    /* These are for 500kbps
+        CANBT1 = 0x00;
+        CANBT2 = 0x04;
+        CANBT3 = 0x12;
     */
 
-    // New CAN settings
-    CANBT1 = 0x06;
-    //CANBT2 = 0x0E;
-    //CANBT3 = 0x7E;
-    CANBT2 = 0x06;
-    CANBT3 = 0xBE;
+    CANBT1 = 0x00;
+    CANBT2 = 0x0C;
+    CANBT3 = 0x36;
 
-    //0x06    0x06    0xbe
 
     // Set up interrupts based on how much the user wants
     switch( interrupt_depth ){
