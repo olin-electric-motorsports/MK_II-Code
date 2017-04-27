@@ -22,11 +22,11 @@
        See the C include lcd.h file for a description of each function
        
 *****************************************************************************/
+#include "lcd.h"
 #include <inttypes.h>
 #include <avr/io.h>
 #include <avr/pgmspace.h>
 #include <util/delay.h>
-#include "lcd.h"
 
 
 

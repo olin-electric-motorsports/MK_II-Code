@@ -11,6 +11,16 @@ uint8_t FLAGS = 0x00;
 uint8_t BUTTON_STATES = 0x00;
 uint16_t ADC_VALUE = 0x00;
 
+
+void grab_new_adc(void)
+{
+    ADCSRA |= _BV(ADSC);
+    while (bit_is_set(ADCSRA, ADSC));
+
+    ADC_VALUE = ADC;
+}
+
+
 void initIO(void)
 {
     // Set up LED IO
@@ -99,7 +109,7 @@ void update_display(void)
     lcd_clrscr();
     char buffer[16];
     memset(buffer, '\0', 16);
-    sprintf(buffer, "%x\n%d", BUTTON_STATES, ADC_VALUE);
+    sprintf(buffer, "%x\n%x", BUTTON_STATES, ADC_VALUE);
     lcd_puts(buffer);
 }
 
