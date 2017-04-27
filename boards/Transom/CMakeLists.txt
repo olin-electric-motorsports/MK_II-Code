@@ -6,4 +6,4 @@ set(H_FUSE 0xD7)
 
 project (Transom C)
 
-new_board(transom)
+new_board(can_api)
