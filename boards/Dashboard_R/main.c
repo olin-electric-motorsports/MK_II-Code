@@ -3,6 +3,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include "can_api.h"
+#include "lcd.h"
 
 int main (void) {
     /* Most basic CAN transmission.
@@ -16,6 +17,9 @@ int main (void) {
 
     // Set the array msg to contain 3 bytes
     uint8_t msg[] = { 0x11, 0x66, 0x0a };
+    // _delay_ms(100);
+    lcd_init(LCD_DISP_ON_BLINK);
+
 
     while(1)
     {
@@ -25,6 +29,8 @@ int main (void) {
       _delay_ms(200);
       // Toggle LED
       PORTB ^= _BV(PB3);
+
+      lcd_puts("HELLO");
 
       // Transmit message
       CAN_Tx( 0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
