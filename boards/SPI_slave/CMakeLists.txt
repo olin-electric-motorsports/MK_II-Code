@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED (VERSION 2.8)
 include (../avr.cmake)
 
-project (SPI_Rx C)
+project (SPI_slave C)
 
 set (L_FUSE 0x65) # Default: 0x62
 
