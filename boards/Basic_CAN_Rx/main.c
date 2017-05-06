@@ -5,24 +5,22 @@
 
 ISR(CAN_INT_vect)
 {
-    // Reset CANPAGE (A necessary step; don't worry about it
-    CANPAGE = 0x00; 
-
-    // msg now contains the first byte of the CAN message.
-    // Repeat this call to receive the other bytes.
-    uint8_t msg = CANMSG; 
+    // Read message into memory
+    uint8_t msg[CAN_IDT_GLOBAL_L]; 
+    CAN_read_received(0, CAN_IDT_GLOBAL_L, msg);
 
     // Set the chip to wait for another message.
-    CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
+    CAN_wait_on_receive(0, CAN_IDT_GLOBAL, CAN_IDT_GLOBAL_L, CAN_IDM_single);
 }
 
-int main (void) {
-    
+
+int main (void)
+{
     // Initialize CAN
-    CAN_init(0, 0);
+    CAN_init(CAN_ENABLED);
 
     // Tell the CAN system to wait for a message.
-    CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
+    CAN_wait_on_receive(0, CAN_IDT_GLOBAL, CAN_IDT_GLOBAL_L, CAN_IDM_single);
 
     while(1) {
         // Wait indefinitely for a message to come.

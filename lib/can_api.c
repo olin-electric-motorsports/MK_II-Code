@@ -1,11 +1,9 @@
 #include "can_api.h"
 
-/* ************** *
- * Functions      *
- * ************** */
-uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
+uint8_t CAN_init (uint8_t mode)
+{
     // Global interrupts
-    sei();
+    sei(); // TODO: Remove from CAN_init (?)
 
     // Software reset; necessary for all CAN
     // stuff.
@@ -15,19 +13,19 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     CANTCON = 0x00; 
 
     // Set BAUD rate
-    /* These are for 500kbps
-        CANBT1 = 0x00;
-        CANBT2 = 0x04;
-        CANBT3 = 0x12;
+    /* 500 kbps
+    CANBT1 = 0x00;
+    CANBT2 = 0x04;
+    CANBT3 = 0x12;
     */
-
+    // 250 kbps
     CANBT1 = 0x00;
     CANBT2 = 0x0C;
     CANBT3 = 0x36;
 
 
     // Set up interrupts based on how much the user wants
-    switch( interrupt_depth ){
+    switch( 0 ){
         // Allow for fall-through with switch
         case 3:
             // Enable Bus off interrupt & buffer frame interrupt
@@ -50,9 +48,9 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     CANIE1 = 0;
 
     // enable interrupts on all MObs
-    CANIE2 = (_BV(IEMOB0) | _BV(IEMOB1) |
-            _BV(IEMOB2) | _BV(IEMOB3) | 
-            _BV(IEMOB4) | _BV(IEMOB5) );
+    CANIE2 = ( _BV(IEMOB0) | _BV(IEMOB1) |
+               _BV(IEMOB2) | _BV(IEMOB3) | 
+               _BV(IEMOB4) | _BV(IEMOB5) );
 
 
     // All MObs come arbitrarily set up at first,
@@ -65,6 +63,7 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
 
         // Disable mob
         CANCDMOB = 0x00;
+
         // Clear mob status register;
         CANSTMOB = 0x00;
     }
@@ -73,23 +72,23 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     //  instead of standby
     //  Necessary in order to get CAN
     //  communication
-
-    if( listen > 0 ){
-        CANGCON |= _BV(LISTEN) | _BV( ENASTB );
-    } else {
+    if (mode == CAN_ENABLED)
+    {
         CANGCON |= _BV( ENASTB );
+    }
+    else if( mode == CAN_LISTEN )
+    {
+        CANGCON |= _BV(LISTEN) | _BV( ENASTB );
     }
 
     return(0);
 }
 
-/* ************** *
- * MOb Type Setup *
- * ************** */
-uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[]){
+uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
+{
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
-        return 1;
+        return CAN_ERR_MOB_BUSY;
     }
 
     // Select CAN mob based on input MOb
@@ -107,7 +106,6 @@ uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
     CANIDT2 = 0x00;
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
-
 
     // Set mask to 0x00
     // Not used by Tx but good practice
@@ -152,12 +150,11 @@ uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
     return 0;
 }
 
-
-uint8_t CAN_Rx(uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t mask){
-
+uint8_t CAN_wait_on_receive (uint8_t mob, uint8_t ident, uint8_t mask, uint8_t msg_length)
+{
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
-        return 1;
+        return CAN_ERR_MOB_BUSY;
     }
 
     // Select CAN mob based on input MOb
@@ -187,3 +184,42 @@ uint8_t CAN_Rx(uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t mask){
 
     return 0;
 }
+
+uint8_t CAN_read_received (uint8_t mob, uint8_t msg_length, uint8_t *msg)
+{
+    // Keep track of errors
+    uint8_t error_value = 0;
+
+    // Select MOb
+    CANPAGE = (mob << MOBNB0);
+    
+    // Check to see if RXOK flag is set
+    if (bit_is_set(CANSTMOB, RXOK))
+    {
+        // Reset RXOK if it is set
+        CANSTMOB &= ~_BV(RXOK);
+    }
+    else
+    {
+        // Update the error value
+        error_value |= _BV(CAN_ERR_NO_RX_FLAG);
+    }
+
+    // Check if DLC is as expected
+    if (bit_is_set(CANSTMOB, DLCW))
+    {
+        error_value |= _BV(CAN_ERR_DLCW);
+        
+        // Set message length to the correct DLC
+        msg_length = (0xF | CANCDMOB);
+    }
+    
+    // Grab messages anyway
+    for (int i = 0; i < msg_length; i++)
+    {
+        msg[i] = CANMSG;
+    }
+
+    return error_value;
+}
+
