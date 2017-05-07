@@ -1,8 +1,9 @@
-#define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
 #include "lcd.h"
 #include "pinDefinitions.h"
 
@@ -36,6 +37,15 @@ void initIO(void)
     ADCSRB |= _BV(AREFEN);
     ADMUX |= 3;
     ADMUX |= _BV(REFS0);
+}
+
+
+void grab_new_adc(void)
+{
+    ADCSRA |= _BV(ADSC);
+    while (bit_is_set(ADCSRA, ADSC));
+
+    ADC_VALUE = ADC;
 }
 
 
@@ -79,18 +89,8 @@ ISR(PCINT2_vect)
         BUTTON_STATES |= _BV(BUTTON1);
     }
 
-
     // Update Display
     FLAGS |= _BV(UPDATE_DISPLAY);
-}
-
-
-void grab_new_adc(void)
-{
-    ADCSRA |= _BV(ADSC);
-    while (bit_is_set(ADCSRA, ADSC));
-
-    ADC_VALUE = ADC;
 }
 
 
@@ -101,6 +101,19 @@ void update_display(void)
     memset(buffer, '\0', 16);
     sprintf(buffer, "%x\n%d", BUTTON_STATES, ADC_VALUE);
     lcd_puts(buffer);
+}
+
+
+void led_follow_button(volatile uint8_t *ledPort, uint8_t ledPin, uint8_t button)
+{
+    if( bit_is_set( BUTTON_STATES, button ) )
+    {
+        *ledPort |= _BV(ledPin);
+    }
+    else
+    {
+        *ledPort &= ~_BV(ledPin);
+    }
 }
 
 
@@ -117,8 +130,12 @@ int main (void)
     PORT_LED2 |= _BV(LED2);
     PORT_LED3 |= _BV(LED3);
 
+    lcd_puts("Hello World!");
 
-    lcd_puts("Hello World!\nNewLine!");
+    // SPI Initialization
+    for( int i =0; i < 3; i++){
+        PORT_LED1 ^= _BV(LED1);
+    }
 
     while (1)
     {
@@ -127,33 +144,10 @@ int main (void)
             update_display();
             FLAGS &= ~_BV(UPDATE_DISPLAY);
         }
-
-        if( bit_is_set( BUTTON_STATES, BUTTON1 ) )
-        {
-            PORT_LED1 |= _BV(LED1);
-        }
-        else
-        {
-            PORT_LED1 &= ~_BV(LED1);
-        }
-
-        if( bit_is_set( BUTTON_STATES, BUTTON2 ) )
-        {
-            PORT_LED2 |= _BV(LED2);
-        }
-        else
-        {
-            PORT_LED2 &= ~_BV(LED2);
-        }
-
-        if( bit_is_set( BUTTON_STATES, BUTTON3 ) )
-        {
-            PORT_LED3 |= _BV(LED3);
-        }
-        else
-        {
-            PORT_LED3 &= ~_BV(LED3);
-        }
+        
+        led_follow_button( &PORT_LED1, LED1, BUTTON1 );
+        led_follow_button( &PORT_LED2, LED2, BUTTON2 );
+        led_follow_button( &PORT_LED3, LED3, BUTTON3 );
     }
 }
 
