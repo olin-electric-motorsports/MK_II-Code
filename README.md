@@ -33,11 +33,11 @@ See how easy that is!
 
 ## How to add a new Board
 
-Woopie! Look at you go, starting to write your own code *from scratch* for the ATmega on the PCB *you* designed. Have a cookie. Before you go about wrecking havoc on the beautiful build system I painstakingly developed, I'm going to teach you how to make your new board's code work flawlessly with the reset of the code.
+Woopie! Look at you go, starting to write your own code *from scratch* for the ATmega on the PCB *you* designed. Have a cookie. Before you go about wrecking havoc on the beautiful build system I painstakingly developed, I'm going to teach you how to make your new board's code work flawlessly with the rest of the code.
 
 We are currently using `cmake`, which is a program that constructs Makefiles based on rules. Each board's folder has a little file in it called `CMakeLists.txt`. This is the file that tells `cmake` how you want it to generate Makefiles.
 
-Simply copy and paste one of the `CMakeLists.txt` files from another folder into your board's folder, and change the name of the board by editing this line:
+Simply copy and paste one of the `CMakeLists.txt` files from another folder (I recommend using the HACKERBOARDV2's `CMakeLists.txt` because it will always be up-to-date) into your board's folder, and change the name of the board by editing this line:
 
 ```cmake
 project ({BoardName} C)
