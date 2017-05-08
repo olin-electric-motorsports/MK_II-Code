@@ -1,5 +1,6 @@
 build/
 obj/
+tags
 
 # Object files
 *.o

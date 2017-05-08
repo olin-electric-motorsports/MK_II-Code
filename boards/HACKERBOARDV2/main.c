@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "lcd.h"
+#include "can_api.h"
 #include "pinDefinitions.h"
 
 uint8_t FLAGS = 0x00;

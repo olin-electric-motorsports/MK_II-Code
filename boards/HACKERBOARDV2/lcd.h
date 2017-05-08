@@ -1,9 +1,5 @@
 #ifndef LCD_H
 #define LCD_H
-
-#ifndef F_CPU
-#define F_CPU (4000000L)
-#endif
 /*************************************************************************
  Title	:   C include file for the HD44780U LCD library (lcd.c)
  Author:    Peter Fleury <pfleury@gmx.ch>  http://tinyurl.com/peterfleury
