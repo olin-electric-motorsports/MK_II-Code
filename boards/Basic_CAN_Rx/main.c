@@ -1,5 +1,4 @@
 /* CAN Rx */
-#define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
 #include "can_api.h"

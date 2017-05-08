@@ -4,6 +4,6 @@ include (../avr.cmake)
 project (CAN_Tx C)
 
 set (L_FUSE 0x65) # Default: 0x62
-set (H_FUSE 0xD7)
+set(F_CPU 4000000UL)
 
 new_board(can_api)

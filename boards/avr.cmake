@@ -26,8 +26,11 @@ macro (new_board)
 
     add_executable (${CMAKE_PROJECT_NAME} ${srcs})
 
-    #add_executable (${CMAKE_PROJECT_NAME} main.c)
-    set (CMAKE_C_FLAGS "-mmcu=${MCU} -g -Os -Wall -Wunused -Wl,-Map=${map_file} -lm")
+    if( NOT DEFINED ${F_CPU} )
+        set (f_cpu 4000000UL)
+    endif( NOT DEFINED ${F_CPU} )
+
+    set (CMAKE_C_FLAGS "-std=c99 -mmcu=${MCU} -g -Os -Wall -Wunused -Wl,-Map=${map_file} -lm -DF_CPU=${F_CPU}")
     set_target_properties (${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${elf_file})
 
     add_custom_target (
