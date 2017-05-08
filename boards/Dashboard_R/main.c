@@ -2,6 +2,7 @@
 #define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
+#include <avr/interrupt.h>
 #include "can_api.h"
 #include "lcd.h"
 
@@ -19,6 +20,9 @@
 #define BUTTON0 0
 #define BUTTON1 1
 #define BUTTON2 2
+
+#define SBUTTON0 0  //Start Button
+#define SBUTTON1 1  //Start Button
 
 #define MOB_THROTTLE      0
 #define MOB_BMS           1
@@ -40,41 +44,51 @@ uint8_t rMode       = 0x00;
 void initIO(void){
 
     //RJ45 LEDs
-    DDRB |= _BV(PB2) | _BV(PB3);
-    PORTB |= _BV(PB2);
-
-    //Pot input
-    DDRC &= ~_BV(PC5); // ADC9
+      DDRB |= _BV(PB2) | _BV(PB3);  // PCINT2 & PCINT3
+      PORTB |= _BV(PB2);
 
     //Start Button sensing
-    DDRB &= ~_BV(PB1); // PCINT21  2
-    PORTB &= ~_BV(PB4); // Backlight LED
+      DDRB &= ~_BV(PB5); // PCINT5 Button
+      PORTB &= ~_BV(PB4); // Backlight LED  PCINT4
 
     // Dashboard lights
-    DDRB |= _BV(PB6);  // IMD status (BLED)
-    DDRB |= _BV(PB7);  // AMS status (RLED)
-    PORTB &= ~_BV(PB6); //BLED
-    PORTB &= ~_BV(PB7); //RLED
+      DDRB |= _BV(PB6);  // IMD status (BLED) PCINT6
+      DDRB |= _BV(PB7);  // AMS status (RLED) PCINT7
+      PORTB &= ~_BV(PB6); //IMD status (BLED)
+      PORTB &= ~_BV(PB7); //AMS status (RLED)
 
-    // MultiSwitch
-    DDRB &= ~_BV(PB1); // PCINT1   0
-    DDRE &= ~_BV(PE1); // PCINT25  3
-    DDRE &= ~_BV(PE2); // PCINT26  3
+    // Blue Buttons
+      DDRB &= ~_BV(PB0); // PCINT0  Button1
+      DDRB &= ~_BV(PB1); // PCINT1  Button2
 
-    // Switches
-    DDRD &= ~_BV(PD3); // PCINT19  2
-    DDRC &= ~_BV(PC6); // PCINT14  1
-    DDRB &= ~_BV(PB3); // PCINT3   0
+    //RTD Speaker Control
+      DDRC |= _BV(PC1); //Enable PCINT9
+
+    //PWM init
+      //Output compare pin is OC1B, so we need OCR1B as our counter
+      TCCR0B |= _BV(CS00); //Clock prescale set to max speed
+      TCCR0A |= _BV(COM1B1) | _BV(WGM00); //Enable the right pwm compare and mode
+      TCCR0A &= ~_BV(COM0B1); //Make sure other PWM is off
+      DDRC |= _BV(PC1); //Enable
+
+      OCR1B = (uint8_t) 0x0F; //Set counter to a 50% duty cycle
 }
 
 
 void initInterrupts(void){
-    PCICR |= _BV(PCIE3) | _BV(PCIE2) | _BV(PCIE1) | _BV(PCIE0);
+    PCICR |= _BV(PCIE3) | _BV(PCIE2) | _BV(PCIE1) | _BV(PCIE0); // Pin Change Interrupt Flag Register
 
-    PCMSK3 |= _BV(PCINT26) | _BV(PCINT25);
-    PCMSK2 |= _BV(PCINT22) | _BV(PCINT21) | _BV(PCINT19);
-    PCMSK1 |= _BV(PCINT14);
-    PCMSK0 |= _BV(PCINT1) | _BV(PCINT3);
+    //Pin Change Mask Register 2
+    // QR Sense and MN Sense
+    PCMSK2 |= _BV(PCINT22) | _BV(PCINT23);
+
+    //Pin Change Mask Register 1
+    // OP Sense, RTD Control, CAN_Tx, CAN_Rx
+    PCMSK1 |= _BV(PCINT8) | _BV(PCINT9) | _BV(PCINT10) | _BV(PCINT11);
+
+    //Pin Change Mask Register 0
+    // Blue Button 1, Blue Button 2, Start, BLED, and RLED
+    PCMSK0 |= _BV(PCINT0) | _BV(PCINT1) | _BV(PCINT5) | _BV(PCINT6) | _BV(PCINT7);
 }
 
 
@@ -118,81 +132,133 @@ uint8_t convertVoltageToTemperature(uint8_t voltage)
 }
 
 
-void updateMode(void)
-{
-    uint8_t all_states = 0x00;
-    all_states |= rSwitch >> MSWITCH0;
-
-    switch (all_states)
-    {
-        case 0:
-            rMode = DEBUG_MODE;
-            break;
-        case 1:
-            rMode = BMS_MODE;
-            break;
-        case 2:
-            rMode = CONFIG_MODE;
-            break;
-        case 3:
-            rMode = DRIVE_MODE;
-            break;
-        default:
-            /* I fucked up with logic somewhere... */
-            rMode = 0x04;
-            break;
-    }
-}
-
 void updateScreen(void)
 {
     char buffer[16];
     lcd_clrscr();
-    switch (rMode)
-    {
-        case DEBUG_MODE:
-            lcd_puts("Debug Mode\n");
 
-            memset(buffer, '\0', 16);
-            sprintf(buffer, "%3d %3d %3d %x",
-                    rThrottle[0], rThrottle[1],
-                    rThrottle[2], rSwitch);
-            lcd_puts(buffer);
-
-            break;
-        case BMS_MODE:
-            lcd_puts("BMS Mode\n");
-            break;
-        case CONFIG_MODE:
-            lcd_puts("Settings Mode\n");
-
-            memset(buffer, '\0', 16);
-            sprintf(buffer, "%s %s",
-                    bit_is_set(rSwitch,SWITCH0)?"S0 ON":"S0 OFF",
-                    bit_is_set(rSwitch,SWITCH1)?"S1 ON":"S1 OFF"
-                    );
-            lcd_puts(buffer);
-            break;
-        case DRIVE_MODE:
-            lcd_puts("Some other Mode\n");
-            break;
-        default:
-            lcd_puts("Invalid mode!\n");
-
-            memset(buffer, '\0', 16);
-            sprintf(buffer, "%d %d %d %d %x",
-                    bit_is_set(rSwitch,MSWITCH0),
-                    bit_is_set(rSwitch,MSWITCH1),
-                    bit_is_set(rSwitch,MSWITCH2),
-                    bit_is_set(rSwitch,MSWITCH3),
-                    (rSwitch >> MSWITCH0)
-                    );
-            lcd_puts(buffer);
-            break;
-    }
 }
 
 //NEW STUFF
+ISR(PCINT5)
+{
+    uint8_t tmp;
+    tmp = PINB;
+
+    //Start Button Signaling Drive Mode Enabled
+    if (bit_is_set(tmp, PB5))
+    {
+        PORTB ^=_BV(PB4);
+
+        uint8_t msg[] = {0x00, 0x01};
+        CAN_Tx( MOB_TX_BMS, IDT_CHARGER, IDT_CHARGER_L, msg);
+    }
+}
+
+ISR(PCINT0)
+{
+    //Blue Button2
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT1)
+{
+    //Blue Button1
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT5)
+{
+    //Start Button
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT6)
+{
+    //Blue LED
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT7)
+{
+    //Red LED
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+//SENSE LINES
+
+ISR(PCINT8)
+{
+    //OP Sense
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT22)
+{
+    //QR Sense
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+ISR(PCINT23)
+{
+    //MN Sense
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+//END SENSE LINES
+
+ISR(PCINT9)
+{
+    //RTD Control
+    if (bit_is_set( , ))
+    {
+      /*
+        TODO
+      */
+    }
+}
+
+
 ISR(CAN_INT_vect)
 {
     // Reset CANPAGE (A necessary step; don't worry about it
@@ -202,124 +268,20 @@ ISR(CAN_INT_vect)
     // Repeat this call to receive the other bytes.
     uint8_t msg = CANMSG;
 
-    // Set the chip to wait for another message.
-    CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
-}
 
-//OLD STUFF
-ISR(PCINT0_vect)
-{
-    uint8_t tmp;
-    tmp = PINB;
+    if (bit_is_set( , ))
+    {
+        CANPAGE = MOB_THROTTLE << MOBNB0;
 
-    /* Multiswitch 0 */
-    if (bit_is_set(tmp, PB1) && bit_is_clear(rSwitch, MSWITCH0))
-    {
-        rSwitch |= _BV(MSWITCH0);
-        updateMode();
-    }
-    else if (bit_is_clear(tmp, PB1) && bit_is_set(rSwitch, MSWITCH0))
-    {
-        rSwitch &= ~_BV(MSWITCH0);
-        updateMode();
-    }
+        msg = CANMSG;
+        rThrottle[0] = CANMSG;
+        rThrottle[1] = CANMSG;
+        rThrottle[2] = CANMSG;
 
-    /* Switch 2 */
-    else if (bit_is_set(tmp, PB3) && bit_is_clear(rSwitch, SWITCH2))
-    {
-        rSwitch |= _BV(SWITCH2);
-    }
-    else if (bit_is_clear(tmp, PB3) && bit_is_set(rSwitch, SWITCH2))
-    {
-        rSwitch &= ~_BV(SWITCH2);
-    }
-}
-
-
-ISR(PCINT1_vect)
-{
-    uint8_t tmp;
-    tmp = PINC;
-
-    /* Switch 1 */
-    if (bit_is_set(tmp, PC6) && bit_is_clear(rSwitch, SWITCH1))
-    {
-        rSwitch |= _BV(SWITCH1);
-    }
-    else if (bit_is_clear(tmp, PC6) && bit_is_set(rSwitch, SWITCH1))
-    {
-        rSwitch &= ~_BV(SWITCH1);
-    }
-}
-
-
-ISR(PCINT2_vect)
-{
-    uint8_t tmp;
-    tmp = PIND;
-
-    /* Switch 0 */
-    if (bit_is_set(tmp, PD3) && bit_is_clear(rSwitch, SWITCH0))
-    {
-        rSwitch |= _BV(SWITCH0);
-    }
-    else if (bit_is_clear(tmp, PD3) && bit_is_set(rSwitch, SWITCH0))
-    {
-        rSwitch &= ~_BV(SWITCH0);
-    }
-
-    /* Button 0 */
-    if (bit_is_set(tmp, PD5) && bit_is_clear(rButton, BUTTON0))
-    {
-        rButton |= _BV(BUTTON0);
-
-        uint8_t msg[] = {0x00, 0x01};
-        CAN_Tx( MOB_TX_BMS, IDT_CHARGER, IDT_CHARGER_L, msg);
-    }
-    else if (bit_is_clear(tmp, PD5) && bit_is_set(rButton, BUTTON0))
-    {
-        rButton &= ~_BV(BUTTON0);
-    }
-
-    /* Button 1 */
-    if (bit_is_set(tmp, PD6))
-    {
-        rButton |= _BV(BUTTON1);
-    }
-    else if (bit_is_clear(tmp, PD6) && bit_is_set(rButton, BUTTON1))
-    {
-        rButton &= ~_BV(BUTTON1);
-    }
-}
-
-
-ISR(PCINT3_vect)
-{
-    uint8_t tmp;
-    tmp = PINE;
-
-    /* Multiswitch 1 */
-    if (bit_is_set(tmp, PE1))
-    {
-        rSwitch |= _BV(MSWITCH1);
-        updateMode();
-    }
-    else if (bit_is_clear(tmp, PE1) && bit_is_set(rSwitch, MSWITCH1))
-    {
-        rSwitch &= ~_BV(MSWITCH1);
-        updateMode();
-    }
-
-    /* Multiswitch 2 */
-    if (bit_is_set(tmp, PE2))
-    {
-        rSwitch |= _BV(MSWITCH2);
-        updateMode();
-    }
-    else if (bit_is_clear(tmp, PE2) && bit_is_set(rSwitch, MSWITCH2))
-    {
-        rSwitch &= ~_BV(MSWITCH2);
-        updateMode();
+        /* Reload the CAN_Rx */
+        CANSTMOB = 0x00;
+        loop_until_bit_is_clear(CANEN2, 0);
+        CAN_Rx(0, IDT_THROTTLE, IDT_THROTTLE_L, IDM_single);
     }
 }
 
@@ -434,34 +396,20 @@ ISR(CAN_INT_vect)
 
 int main (void) {
 
-    // Initialize CAN
-    CAN_init(0, 0);
+  sei();
 
-    // Set the array msg to contain 3 bytes
-    uint8_t msg[] = { 0x11, 0x66, 0x0a };
-    // _delay_ms(100);
-    lcd_init(LCD_DISP_ON_CURSOR_BLINK);
+  initIO();
+  initInterrupts();
+  initTimer();
 
-    lcd_puts("Hello World!\n'Quite Lit!'");
+  CAN_init(0, 0);
+  CAN_Rx(MOB_THROTTLE, IDT_THROTTLE, IDT_THROTTLE_L, IDM_single); //TODO
+  CAN_Rx(MOB_BMS, IDT_BMS_2, IDT_BMS_L, IDM_single);  //TODO
 
+  lcd_init(LCD_DISP_ON_CURSOR_BLINK);
+  lcd_clrscr();
+  lcd_puts("Ready to go!\n");
 
-    while(1)
-    {
-      // Toggle LED
-      PORTB ^=_BV(PB3);
-      // Delay for 200us
-      _delay_ms(200);
-      // Toggle LED
-      PORTB ^= _BV(PB3);
-
-      // lcd_clrscr()
-      // lcd_puts("HELLO");
-      // lcd_init(LCD_DISP_ON_BLINK);
-
-      // Transmit message
-      CAN_Tx( 0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
-
-      // Wait 2 seconds before sending again
-      _delay_ms(2000);
-    }
+  for(;;){
+  }
 }
