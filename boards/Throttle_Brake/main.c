@@ -29,27 +29,27 @@ int main (void) {
     CAN_init(0, 0);
 
     // Set the array msg to contain 3 bytes
-    uint8_t msg[] = {0xF1};
+    uint8_t msg[] = {0xF1, 0x00, 0x00};
 
     //CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
-    CAN_Tx(0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
+
     // Transmit message
-
-
     // Set PE1 to output
     // Use pin 10 to light up an LED
     DDRC |= _BV(PC7);
     DDRB |= _BV(PB2);
 
 
-    while(1) {
-        // Toggle PE1 (pin 10)
-        // Toggles power to pin 10 to create a "blink"
-        //sends CAN Message to the Transom
-        //CAN_Tx(0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
-        PORTB ^= _BV(PB2); //Dp1
-        _delay_ms(500);
-      }
+    while(1)
+    {
+      CAN_Tx(0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
+      // Toggle PE1 (pin 10)
+      // Toggles power to pin 10 to create a "blink"
+      //sends CAN Message to the Transom
+      //CAN_Tx(0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
+      PORTB ^= _BV(PB2); //Dp1
+      _delay_ms(500);
+    }
 
         // Give a delay to the toggle so it doesn't infinitely toggle
 
