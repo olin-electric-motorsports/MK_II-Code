@@ -1,12 +1,7 @@
 #include "can_api.h"
 
-/* ************** *
- * Functions      *
- * ************** */
-uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
-    // Global interrupts
-    sei();
-
+uint8_t CAN_init (uint8_t mode)
+{
     // Software reset; necessary for all CAN
     // stuff.
     CANGCON = _BV(SWRES);
@@ -15,44 +10,26 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     CANTCON = 0x00; 
 
     // Set BAUD rate
-    /* These are for 500kbps
-        CANBT1 = 0x00;
-        CANBT2 = 0x04;
-        CANBT3 = 0x12;
+    /* 500 kbps
+    CANBT1 = 0x00;
+    CANBT2 = 0x04;
+    CANBT3 = 0x12;
     */
-
+    // 250 kbps
     CANBT1 = 0x00;
     CANBT2 = 0x0C;
     CANBT3 = 0x36;
 
-
-    // Set up interrupts based on how much the user wants
-    switch( interrupt_depth ){
-        // Allow for fall-through with switch
-        case 3:
-            // Enable Bus off interrupt & buffer frame interrupt
-            CANGIE |= _BV(ENBOFF) | _BV(ENBX);
-        case 2:
-            // Enable general CAN interrupts & MOb interrupts
-            CANGIE |= _BV(ENERG) | _BV(ENERR);
-        case 1:
-            // Enable transmission interrupts
-            CANGIE |= _BV(ENTX);
-        case 0:
-            // Allow all interrupts & receive interrupts
-            CANGIE |= _BV(ENIT) | _BV(ENRX);
-        default:
-            break;
-            // No interrupts ?
-    }
+    // Allow all interrupts & receive interrupts
+    CANGIE |= _BV(ENIT) | _BV(ENRX);
 
     // compatibility with future chips
     CANIE1 = 0;
 
     // enable interrupts on all MObs
-    CANIE2 = (_BV(IEMOB0) | _BV(IEMOB1) |
-            _BV(IEMOB2) | _BV(IEMOB3) | 
-            _BV(IEMOB4) | _BV(IEMOB5) );
+    CANIE2 = ( _BV(IEMOB0) | _BV(IEMOB1) |
+               _BV(IEMOB2) | _BV(IEMOB3) | 
+               _BV(IEMOB4) | _BV(IEMOB5) );
 
 
     // All MObs come arbitrarily set up at first,
@@ -65,6 +42,7 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
 
         // Disable mob
         CANCDMOB = 0x00;
+
         // Clear mob status register;
         CANSTMOB = 0x00;
     }
@@ -73,33 +51,32 @@ uint8_t CAN_init( uint8_t interrupt_depth, uint8_t listen ){
     //  instead of standby
     //  Necessary in order to get CAN
     //  communication
-
-    if( listen > 0 ){
-        CANGCON |= _BV(LISTEN) | _BV( ENASTB );
-    } else {
+    if (mode == CAN_ENABLED)
+    {
         CANGCON |= _BV( ENASTB );
     }
-
-    return(0);
-}
-
-/* ************** *
- * MOb Type Setup *
- * ************** */
-uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[]){
-    // Check that the MOb is free
-    if( bit_is_set(CANEN2, mob) ){
-        return 1;
+    else if( mode == CAN_LISTEN )
+    {
+        CANGCON |= _BV(LISTEN) | _BV( ENASTB );
     }
 
-    // Select CAN mob based on input MOb
+    return 0;
+}
+
+
+uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
+{
+    // Check that the MOb is free
+    if( bit_is_set(CANEN2, mob) ){
+        return CAN_ERR_MOB_BUSY;
+    }
+
+    // Select CAN mob based on input MOb;
+    // also resets the CANPAGE
     CANPAGE = (mob << MOBNB0);
 
-    // Reset CANPAGE.INDXn
-    CANPAGE &= ~(_BV(INDX0) | _BV(INDX1) | _BV(INDX2));
-
     // Clean CAN status for this MOb
-    CANSTMOB = 0x0;
+    CANSTMOB = 0x00;
 
     // Set MOb ID
     //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
@@ -107,7 +84,6 @@ uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
     CANIDT2 = 0x00;
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
-
 
     // Set mask to 0x00
     // Not used by Tx but good practice
@@ -127,44 +103,47 @@ uint8_t CAN_Tx  ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
     CANCDMOB = 0x00;
     CANCDMOB = (0x01 << CONMOB0) | (msg_length << DLC0);
 
-    // Check for errors 
-    // TODO: Set up interrupts for this shit
-    //while( (CANSTMOB & _BV(TXOK)) == 0){
-        //PORTB |= _BV(PB2);
-        //if( CANSTMOB & _BV(BERR) != 0){
-        //if( CANSTMOB & _BV(SERR) != 0){
-        //if( CANSTMOB & _BV(CERR) != 0){
-        //if( CANSTMOB & _BV(FERR) != 0){
-        //if( CANSTMOB & _BV(AERR) != 0){
-        //if( CANGSTA & _BV(TXBSY) != 0){
-            //PORTC |= _BV(PC4);
-    
-        //}else{
-            //PORTC &= ~_BV(PC4);
-        //}
-    //}
-
-    // Should clear CANSTMOB once
-    // Tx job is done. --This is done
-    // on startup routine might not be needed
-    //CANSTMOB=0x00;
+    // TODO: Have interrupt to check status of transmitted message?
 
     return 0;
 }
 
 
-uint8_t CAN_Rx(uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t mask){
+uint8_t CAN_transmit_success (uint8_t mob)
+{
+    // Check busy status
+    if (bit_is_set(CANEN2, mob))
+    {
+        return CAN_ERR_MOB_BUSY;
+    }
 
+    // Check if OK transmission
+    if (bit_is_set(CANSTMOB, TXOK))
+    {
+        CANSTMOB &= ~_BV(TXOK);
+    }
+
+    if (CANSTMOB != 0x00)
+    {
+        return CAN_ERR_UNKNOWN;
+    }
+
+    return 0
+}
+
+
+uint8_t CAN_wait_on_receive (uint8_t mob, uint8_t ident, uint8_t mask, uint8_t msg_length)
+{
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
-        return 1;
+        return CAN_ERR_MOB_BUSY;
     }
 
     // Select CAN mob based on input MOb
     CANPAGE = (mob << MOBNB0);
 
     // Clean CAN status for this MOb
-    CANSTMOB = 0x0;
+    CANSTMOB = 0x00;
 
     // Set MOb ID
     //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
@@ -187,3 +166,46 @@ uint8_t CAN_Rx(uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t mask){
 
     return 0;
 }
+
+
+uint8_t CAN_read_received (uint8_t mob, uint8_t msg_length, uint8_t *msg)
+{
+    // Keep track of errors
+    uint8_t error_value = 0;
+
+    // Select MOb
+    CANPAGE = (mob << MOBNB0);
+    
+    // Check to see if RXOK flag is set
+    if (bit_is_set(CANSTMOB, RXOK))
+    {
+        // Reset RXOK if it is set
+        CANSTMOB &= ~_BV(RXOK);
+    }
+    else
+    {
+        // Update the error value
+        error_value = CAN_ERR_NO_RX_FLAG;
+    }
+
+    // Check if DLC is as expected
+    if (bit_is_set(CANSTMOB, DLCW))
+    {
+        error_value = CAN_ERR_DLCW;
+        
+        // Set message length to the correct DLC
+        msg_length = (0xF | CANCDMOB);
+    }
+    
+    // Grab messages anyway
+    for (int i = 0; i < msg_length; i++)
+    {
+        msg[i] = CANMSG;
+    }
+
+    // Reset entire status register
+    CANSTMOB = 0x00;
+
+    return error_value;
+}
+
