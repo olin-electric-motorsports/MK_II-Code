@@ -5,7 +5,7 @@
 #include "display.h" // LED Definitions
 
 // Local Global
-uint8_t glDEBOUNCE_THRESH = 2;
+uint8_t glDEBOUNCE_THRESH = 10;
 
 ISR(PCINT0_vect)
 {

@@ -1,5 +1,6 @@
 #include <avr/io.h>
 #include "state.h"
+#include "potentiometer.h"
 
 static void handle_select_main(void)
 {
@@ -46,50 +47,74 @@ static void handle_select_send(void)
     }
 }
 
+static void handle_edit_CAN_select(void)
+{
+    if (gEDIT_CAN == 0)
+    {
+        gEDIT_CAN = 1;
+        async_read_potentiometer_on();
+    }
+    else
+    {
+        gEDIT_CAN = 0;
+        async_read_potentiometer_off();
+    }
+}
+
 static void handle_select_spoof_throttle(void)
 {
     switch (gSCROLL_POS)
     {
         case 0: // CAN Rate
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 1: // Torque 1
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 2: // Torque 2
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 3: // Brake
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+            
         case 4: // BSPD
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 5: // Shutdown 0x05
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 6: // Shutdown 0x06
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 7: // Shutdown 0x07
-            gEDIT_CAN ^= 1;
+            handle_edit_CAN_select();
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         case 8: // CAN Errors
             break;
+
         case 9: // Back
             gDISPLAY_STATE = SEND_SCREEN;
             gSCROLL_LIMIT = SEND_SCREEN_LENGTH;
             gSCROLL_POS = 0;
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
+
         default:
             break;
     }
@@ -132,3 +157,36 @@ void handle_select(void)
         handle_select_spoof_throttle();
     }
 }
+
+void handle_ADC_update(void)
+{
+    // Can't update ADC w/o being in Edit mode
+    if (gEDIT_CAN != 1)
+    {
+        //gFLAGS |= _BV(LOGICAL_ERROR);
+    }
+
+    // Update values
+    if (gSCROLL_POS == 0)
+    {
+        if (gCAN_RATE != gADC_VAL)
+        {
+            gCAN_RATE = gADC_VAL;
+            gFLAGS |= _BV(UPDATE_DISPLAY);
+        }
+    }
+    else if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_LEN)
+    {
+        uint8_t idx = gSCROLL_POS - 1;
+        if (gCAN_DATA[idx] != gADC_VAL)
+        {
+            gCAN_DATA[idx] = gADC_VAL;
+            gFLAGS |= _BV(UPDATE_DISPLAY);
+        }
+    }
+    else
+    {
+        gFLAGS |= _BV(LOGICAL_ERROR);
+    }
+}
+

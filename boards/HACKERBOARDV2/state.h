@@ -1,9 +1,11 @@
 // Define Global variables that keep track of the state
 
-extern uint8_t gFLAGS;
+extern volatile uint8_t gFLAGS;
 #define UPDATE_DISPLAY 0
+#define NEW_ADC_VAL    1
+#define LOGICAL_ERROR  2
 
-extern uint8_t gSCROLL_POS;
+extern volatile uint8_t gSCROLL_POS;
 
 extern uint8_t gSCROLL_LIMIT;
 #define MAIN_SCREEN_LENGTH 4
@@ -42,7 +44,10 @@ extern uint8_t gCAN_DATA[8];
 extern uint8_t gCAN_LEN;
 extern uint8_t gCAN_RATE;
 extern uint8_t gEDIT_CAN;
+extern volatile uint8_t gADC_VAL;
 
 
 // Functions
 void handle_select(void);
+void handle_ADC_update(void);
+

@@ -1,7 +1,7 @@
 #ifndef TIMER_H
 #define TIMER_H
 
-void initTimer8(void);
-void initTimer16(void);
+void initADCTimer(void);
+void initDebounceTimer(void);
 
 #endif
