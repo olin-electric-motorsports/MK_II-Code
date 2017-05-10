@@ -12,6 +12,7 @@
 #include "display.h"
 #include "timer.h"
 #include "lcd.h"
+#include "can.h"
 
 // Global Globals
 volatile uint8_t gFLAGS = 0x00;
@@ -24,6 +25,9 @@ uint8_t gCAN_DATA[8] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8 };
 uint8_t gCAN_LEN = 0;
 uint8_t gCAN_RATE = 0x00;
 uint8_t gEDIT_CAN = 0;
+uint8_t gCAN_ERRORS = 0;
+uint8_t gCAN_MOB_USED[6] = { 0x00, 0x00, 0x00,
+                             0x00, 0x00, 0x00 };
 volatile uint8_t gADC_VAL = 0;
 
 int main (void)
@@ -45,6 +49,14 @@ int main (void)
             handle_ADC_update();
             gFLAGS &= ~_BV(NEW_ADC_VAL);
         }
+
+        /*
+        if (bit_is_set(gFLAGS, CAN_STATE_CHANGE))
+        {
+            handle_CAN_state_change();
+            gFLAGS &= ~_BV(CAN_STATE_CHANGE);
+        }
+        */
 
         if (bit_is_set(gFLAGS, UPDATE_DISPLAY))
         {

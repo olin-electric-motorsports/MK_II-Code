@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include "state.h"
 #include "potentiometer.h"
+#include "can.h"
 
 static void handle_select_main(void)
 {
@@ -172,11 +173,13 @@ void handle_ADC_update(void)
         if (gCAN_RATE != gADC_VAL)
         {
             gCAN_RATE = gADC_VAL;
-            gFLAGS |= _BV(UPDATE_DISPLAY);
+            gFLAGS |= _BV(UPDATE_DISPLAY) | _BV(CAN_STATE_CHANGE);
         }
     }
+    // Handle CAN Value edit
     else if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_LEN)
     {
+        // TODO: Have boolean flags if parameter is 0x00/0xFF
         uint8_t idx = gSCROLL_POS - 1;
         if (gCAN_DATA[idx] != gADC_VAL)
         {
@@ -184,6 +187,33 @@ void handle_ADC_update(void)
             gFLAGS |= _BV(UPDATE_DISPLAY);
         }
     }
+    // Handle logic error
+    else
+    {
+        gFLAGS |= _BV(LOGICAL_ERROR);
+    }
+}
+
+void handle_CAN_state_change(void)
+{
+    // Tranmist Mode
+    if (gDISPLAY_STATE > 3 && gDISPLAY_STATE < 14)
+    {
+        // Turn off CAN transmit
+        if (gCAN_RATE == 0)
+        {
+        }
+        // Turn on CAN transmit or change speed
+        else
+        {
+        
+        }
+    }
+    // Receive Mode
+    else if (gDISPLAY_STATE > 13 && gDISPLAY_STATE < 24)
+    {
+    }
+    // Error happened somewhere
     else
     {
         gFLAGS |= _BV(LOGICAL_ERROR);

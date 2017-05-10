@@ -1,9 +1,10 @@
 // Define Global variables that keep track of the state
 
 extern volatile uint8_t gFLAGS;
-#define UPDATE_DISPLAY 0
-#define NEW_ADC_VAL    1
-#define LOGICAL_ERROR  2
+#define UPDATE_DISPLAY    0
+#define NEW_ADC_VAL       1
+#define CAN_STATE_CHANGE  2
+#define LOGICAL_ERROR     3 // TODO: Have an error handling method
 
 extern volatile uint8_t gSCROLL_POS;
 
@@ -34,6 +35,18 @@ extern uint8_t gDISPLAY_STATE;
 #define SPOOF_CHARGING_SCREEN   12
 #define SPOOF_MSP_SCREEN        13
 
+// Read is 14 - 23
+#define READ_GLOBAL_SCREEN     14
+#define READ_PANIC_SCREEN      15
+#define READ_THROTTLE_SCREEN   16
+#define READ_BMS_SCREEN        17
+#define READ_AIR_CTRL_SCREEN   18
+#define READ_TRANSOM_SCREEN    19
+#define READ_LIQ_COOL_SCREEN   20
+#define READ_DASHBOARD_SCREEN  21
+#define READ_CHARGING_SCREEN   22
+#define READ_MSP_SCREEN        23
+
 
 extern uint8_t gBUTTON_STATES;
 #define BUTTON1 0 //PCINT23
@@ -46,6 +59,17 @@ extern uint8_t gCAN_RATE;
 extern uint8_t gEDIT_CAN;
 extern volatile uint8_t gADC_VAL;
 
+extern uint8_t gCAN_ERRORS;
+#define ERR_CAN_BUSY 0;
+#define ERR_CAN_BOFF 1; // Bus off
+#define ERR_CAN_BERR 2; // Bit Error
+#define ERR_CAN_SERR 3; // Stuff Error
+#define ERR_CAN_CERR 4; // CRC Error
+#define ERR_CAN_FERR 5; // Form Error
+#define ERR_CAN_AERR 6; // Ack Error
+#define ERR_CAN_DLC  7; // DLC Warning Error
+
+// TODO: Extend to use all MObs at once if needed
 
 // Functions
 void handle_select(void);
