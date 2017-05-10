@@ -13,6 +13,5 @@
 void initLEDs ( void );
 void initDisplay ( void );
 void update_display ( void );
-void update_scroll ( void );
 
 #endif

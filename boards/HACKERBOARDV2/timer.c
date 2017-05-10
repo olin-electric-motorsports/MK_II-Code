@@ -15,7 +15,7 @@ void initTimer16(void)
     // Normal mode of operation
     TCCR1A = 0x00;
     
-    // Prescale to ClkIO/1024
-    TCCR1B |= 0x05;
+    // Prescale to ClkIO/256
+    TCCR1B |= 0x04;
 }
 

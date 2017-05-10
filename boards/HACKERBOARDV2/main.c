@@ -13,75 +13,17 @@
 #include "timer.h"
 #include "lcd.h"
 
-uint8_t gDISPLAY_FLAGS = 0x00;
-uint8_t gSCROLL_STATE = 0x00;
+// Global Globals
+uint8_t gFLAGS = 0x00;
+uint8_t gSCROLL_POS = 0;
+uint8_t gSCROLL_LIMIT = MAIN_SCREEN_LENGTH;
+uint8_t gDISPLAY_STATE = MAIN_SCREEN;
+
 uint8_t gBUTTON_STATES = 0x00;
-uint8_t glDEBOUNCE_THRESH = 2;
-
-ISR(PCINT0_vect)
-{
-    static uint8_t button2_time_last;
-    static uint8_t button3_time_last;
-
-    uint8_t current_time = TCNT1;
-
-    // Button 2
-    if (current_time - button2_time_last > glDEBOUNCE_THRESH)
-    {
-        if (bit_is_set(PINB, PB1))
-        {
-            gBUTTON_STATES &= ~_BV(BUTTON2);
-        }
-        else
-        {
-            gBUTTON_STATES |= _BV(BUTTON2);
-        }
-
-        led_follow_button( &PORT_LED2, LED2, BUTTON2 );
-        gDISPLAY_FLAGS |= _BV(UPDATE_DISPLAY);
-    }
-
-    // Button 3
-    if (current_time - button3_time_last > glDEBOUNCE_THRESH)
-    {
-        if (bit_is_set(PINB, PB0))
-        {
-            gBUTTON_STATES &= ~_BV(BUTTON3);
-        }
-        else
-        {
-            gBUTTON_STATES |= _BV(BUTTON3);
-        }
-
-        led_follow_button( &PORT_LED3, LED3, BUTTON3 );
-        gDISPLAY_FLAGS |= _BV(UPDATE_DISPLAY);
-    }
-
-}
-
-
-ISR(PCINT2_vect)
-{
-    static uint8_t button1_time_last;
-
-    uint8_t current_time = TCNT1;
-
-    // Button 1
-    if (current_time - button1_time_last > glDEBOUNCE_THRESH)
-    {
-        if (bit_is_set(PIND, PD7))
-        {
-            gBUTTON_STATES &= ~_BV(BUTTON1);
-        }
-        else
-        {
-            gBUTTON_STATES |= _BV(BUTTON1);
-        }
-
-        led_follow_button( &PORT_LED1, LED1, BUTTON1 );
-        gDISPLAY_FLAGS |= _BV(UPDATE_DISPLAY);
-    }
-}
+uint8_t gCAN_DATA[8] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8 };
+uint8_t gCAN_LEN = 0;
+uint8_t gCAN_RATE = 0x00;
+uint8_t gEDIT_CAN = 0;
 
 
 int main (void)
@@ -97,10 +39,10 @@ int main (void)
 
     while (1)
     {
-        if (bit_is_set(gDISPLAY_FLAGS, UPDATE_DISPLAY))
+        if (bit_is_set(gFLAGS, UPDATE_DISPLAY))
         {
-            update_scroll();
-            gDISPLAY_FLAGS &= ~_BV(UPDATE_DISPLAY);
+            update_display();
+            gFLAGS &= ~_BV(UPDATE_DISPLAY);
         }
       //uint8_t time = TCNT0;
       //if (time - old_time > 60)
