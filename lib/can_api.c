@@ -128,7 +128,7 @@ uint8_t CAN_transmit_success (uint8_t mob)
         return CAN_ERR_UNKNOWN;
     }
 
-    return 0
+    return 0;
 }
 
 
