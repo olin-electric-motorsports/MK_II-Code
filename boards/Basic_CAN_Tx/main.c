@@ -1,5 +1,4 @@
 /* CAN Tx */
-#define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
 #include "can_api.h"
@@ -10,11 +9,11 @@ int main (void) {
      * 0x0a and then quits. */
     
     // Initialize CAN
-    CAN_init(0, 0);
+    CAN_init(CAN_ENABLED);
 
     // Set the array msg to contain 3 bytes
-    uint8_t msg[] = { 0x11, 0x66, 0x0a };
+    uint8_t msg[CAN_IDT_GLOBAL_L] = { 0x11, 0x66, 0x0a };
 
     // Transmit message
-    CAN_Tx( 0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
+    CAN_transmit( 0, CAN_IDT_GLOBAL, CAN_IDT_GLOBAL_L, msg );
 }

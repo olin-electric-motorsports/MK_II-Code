@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED (VERSION 2.8)
 include (../avr.cmake)
 
-project (CAN_Tx C)
+project (SPI_master C)
 
 set (L_FUSE 0x65) # Default: 0x62
 set(F_CPU 4000000UL)
