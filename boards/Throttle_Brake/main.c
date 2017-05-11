@@ -4,31 +4,42 @@
 #include <avr/interrupt.h>
 #include "can_api.h"
 
-
+uint8_t FLAG = 0x00;
+ISR(PCINT2_vect){
+  FLAG ^= 0x01;
+}
 
 int main (void) {
   sei();
+  // Initialize CAN
+  CAN_init(CAN_ENABLED);
 
-    // Initialize CAN
-    CAN_init(0, 0);
-
-    // Set the array msg to contain 3 bytes
-    uint8_t msg[] = {0xF1, 0x00, 0x00};
-
-
-    // Set PE1 to output
-    DDRC |= _BV(PC7);
-    DDRB |= _BV(PB2);
+  // Set the array msg to contain 3 bytes
+  uint8_t msg[] = {0x00, 0x00, 0x00};
 
 
-    while(1)
-    {
-      CAN_Tx(0, IDT_GLOBAL, IDT_GLOBAL_L, msg );
-      //sends CAN Message to the Transom constantly
-      //flashes Led to validate the messsage is being sent
-      PORTB ^= _BV(PB2); //Dp1
-      _delay_ms(500);
-    }
+  // Set PE1 to output
+  DDRC |= _BV(PC7);
+  DDRB |= _BV(PB2);
 
+  PCICR |= _BV(PCIE2);//in 2nd mask register
+  PCMSK2 |= _BV(PCINT21); //enable interups for pin 21
+
+  while(1)
+  {
+    if (FLAG & 0x01){
+      msg[0] = 0xFF;
+      PORTB |= _BV(PB2); //turns on the led
 
     }
+    else{
+      msg[0] = 0x00;
+      PORTB &= ~_BV(PB2); //turns off the led
+    }
+      CAN_transmit(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg );
+      _delay_ms(1);
+
+  }
+
+
+}
