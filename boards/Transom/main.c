@@ -3,18 +3,17 @@
 #include <avr/interrupt.h>
 #include "can_api.h"
 
-
+// ISR to flash brake light
 ISR(CAN_INT_vect){
 
-    PORTC |= _BV(PC6);
     uint8_t msg[CAN_IDT_TRANSOM_L];
-
+    // CAN ready to recieve the first message
     CAN_read_received(0, CAN_IDT_TRANSOM_L, msg);
 
-    if (msg[0] == 0xFF){//if pin PC0 is not zero (aka if brake is pressed at all)
-        PORTC |= _BV(PC6); //turn on the brake light
+    if (msg[0] == 0xFF){ //if the message contains 0xFF in the first spot of array instead of 0x00
+        PORTC |= _BV(PC6); //turn on the brake lightpin PC0 is not zero (aka if brake is pressed at all)
     }
-    else{//if the brake is not pressed
+    else{ //if the brake is not pressed
         PORTC &= ~(_BV(PC6)); //turn the light back to 0 so off
     }
     // Set the chip to wait for another message.
@@ -37,11 +36,9 @@ int main (void) {
     if (err > 0){
       PORTC |= _BV(PC6);
     }
-    // Set PE1 to output
-    // Use pin 10 to light up an LED
+
     DDRC |= _BV(PC0);
-    //DDRC |= _BV(PC0);
-    DDRC |= _BV(PC6); //set brake pin to 0 to start
+    DDRC |= _BV(PC6);
 
     while(1) {
       // PORTC ^= _BV(PC0); //D1
