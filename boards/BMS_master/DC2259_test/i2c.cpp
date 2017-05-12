@@ -8,7 +8,7 @@
 
 void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
 {
-  Serial.println("In write_i2c.");
+  //Serial.println("In write_i2c.");
   uint8_t START = 0x60;
   uint8_t STOP = 0x01;
   uint8_t ACK = 0x00;
@@ -46,29 +46,29 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
 
   if (loop_count == 0) { // if there is no data, free up the bus
     comm[0][5] = (command<<4) | NACK_STOP;
-    Serial.println("Adding NACK_STOP since there is no data");
+    //Serial.println("Adding NACK_STOP since there is no data");
   }
 
-  Serial.print("comm: ");
-  for(uint8_t i=0; i < 6; i++){
-    Serial.print(comm[0][i],HEX);
-    Serial.print(", ");
-  }
-  Serial.println();
+//  Serial.print("comm: ");
+//  for(uint8_t i=0; i < 6; i++){
+//    Serial.print(comm[0][i],HEX);
+//    Serial.print(", ");
+//  }
+//  Serial.println();
 
 
   ltc6811_wrcomm(total_ic,comm);
   ltc6811_stcomm();
   ltc6811_rdcomm(total_ic,rx_comm);
 
-  Serial.print("rx_comm: ");
-  for(uint8_t i=0; i < 6; i++){
-    Serial.print(rx_comm[0][i],HEX);
-    Serial.print(", ");
-  }
-  Serial.println();
-
-  Serial.println("sent command");
+//  Serial.print("rx_comm: ");
+//  for(uint8_t i=0; i < 6; i++){
+//    Serial.print(rx_comm[0][i],HEX);
+//    Serial.print(", ");
+//  }
+//  Serial.println();
+//
+//  Serial.println("sent command");
 
   transmitted_bytes = 0;
   for (uint8_t i=0; i<loop_count; i++)
@@ -176,7 +176,7 @@ uint8_t read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *
       for (int k=0; k<remainder; k++)
       {
         data[rx_data] = ((rx_comm[0][data_counter]&0x0F)<<4)|((rx_comm[0][data_counter+1]&0xF0)>>4); //
-        Serial.println(data[rx_data],HEX);
+        //Serial.println(data[rx_data],HEX);
         rx_data++;
         data_counter = data_counter+2;
       }

@@ -628,6 +628,33 @@ void run_command(uint32_t cmd)
       }
   
       break;
+
+    case 26: //read cell temp
+      wakeup_sleep(TOTAL_IC);
+      ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+      mux_disable(TOTAL_IC, mux2_address); //disable mux 2
+      for(uint8_t i = 0; i < 6; i++){ //read from mux 1
+        set_mux_channel(TOTAL_IC, mux1_address, 0);
+        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+        ltc6811_pollAdc();
+      
+        error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
+        check_error(error);
+        print_aux();
+      }
+
+      mux_disable(TOTAL_IC, mux1_address); //disable mux 1
+      for(uint8_t i = 0; i < 6; i++){ //read from mux 2
+        set_mux_channel(TOTAL_IC, mux2_address, 0);
+        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+        ltc6811_pollAdc();
+      
+        error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
+        check_error(error);
+        print_aux();
+      }
+      
+      break;
     
      
     case 'm':
@@ -680,6 +707,7 @@ void print_menu()
   Serial.println(F("                                  | Read EEprom: 21"));
   Serial.println(F("                                  | Set MUX to cell 1 temp: 22"));
   Serial.println(F("                                  | Set MUX to cell 2 temp: 23"));
+  Serial.println(F("                                  | Read Cell Temp: 26"));
   Serial.println();
   Serial.println(F("Please enter command: "));
   Serial.println();
