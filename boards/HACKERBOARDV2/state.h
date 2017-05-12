@@ -54,7 +54,8 @@ extern uint8_t gBUTTON_STATES;
 #define BUTTON3 2 //PCINT1
 
 extern uint8_t gCAN_DATA[8];
-extern uint8_t gCAN_LEN;
+extern uint8_t gCAN_IDT;
+extern uint8_t gCAN_IDT_L;
 extern uint8_t gCAN_RATE;
 extern uint8_t gEDIT_CAN;
 extern volatile uint8_t gADC_VAL;

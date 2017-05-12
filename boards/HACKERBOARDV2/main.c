@@ -22,7 +22,8 @@ uint8_t gDISPLAY_STATE = MAIN_SCREEN;
 
 uint8_t gBUTTON_STATES = 0x00;
 uint8_t gCAN_DATA[8] = { 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8 };
-uint8_t gCAN_LEN = 0;
+uint8_t gCAN_IDT = 0x00;
+uint8_t gCAN_IDT_L = 0x00;
 uint8_t gCAN_RATE = 0x00;
 uint8_t gEDIT_CAN = 0;
 uint8_t gCAN_ERRORS = 0;

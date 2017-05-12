@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include "state.h"
 #include "potentiometer.h"
+#include "can_api.h"
 #include "can.h"
 
 static void handle_select_main(void)
@@ -33,7 +34,8 @@ static void handle_select_send(void)
         case 2: // Throttle
             gDISPLAY_STATE = SPOOF_THROTTLE_SCREEN;
             gSCROLL_LIMIT = SPOOF_THROTTLE_SCREEN_LENGTH;
-            gCAN_LEN = SPOOF_THROTTLE_CAN_LENGTH;
+            gCAN_IDT = CAN_IDT_THROTTLE;
+            gCAN_IDT_L = CAN_IDT_THROTTLE_L;
             gSCROLL_POS = 0;
             gFLAGS |= _BV(UPDATE_DISPLAY);
             break;
@@ -177,7 +179,7 @@ void handle_ADC_update(void)
         }
     }
     // Handle CAN Value edit
-    else if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_LEN)
+    else if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_IDT_L)
     {
         // TODO: Have boolean flags if parameter is 0x00/0xFF
         uint8_t idx = gSCROLL_POS - 1;

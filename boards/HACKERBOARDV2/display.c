@@ -48,7 +48,7 @@ inline void initDisplay(void)
     lcd_puts("HackerBoard V2\nSoftware 0.1");
 }
 
-inline void update_spoof_screen(void)
+static inline void update_spoof_screen(void)
 {
     char *spoof_throttle[] = { "Rate    ",
                                "Torque1 ", 
@@ -83,7 +83,7 @@ inline void update_spoof_screen(void)
 
     if (gSCROLL_POS % 2 == 0)
     {
-        if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_LEN)
+        if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_IDT_L)
         {
             sprintf(val1, "    0x%02X", gCAN_DATA[gSCROLL_POS-1]);
         }
@@ -92,7 +92,7 @@ inline void update_spoof_screen(void)
             sprintf(val1, "    0x%02X", gCAN_RATE);
         }
 
-        if ( gSCROLL_POS < gCAN_LEN )
+        if ( gSCROLL_POS < gCAN_IDT_L )
         {
             sprintf(val2, "    0x%02X", gCAN_DATA[gSCROLL_POS]);
         }
@@ -102,7 +102,7 @@ inline void update_spoof_screen(void)
     }
     else
     {
-        if ( (uint8_t) (gSCROLL_POS - 2) < gCAN_LEN)
+        if ( (uint8_t) (gSCROLL_POS - 2) < gCAN_IDT_L)
         {
             sprintf(val1, "    0x%02X", gCAN_DATA[gSCROLL_POS-2]);
         }
@@ -111,7 +111,7 @@ inline void update_spoof_screen(void)
             sprintf(val1, "    0x%02X", gCAN_RATE);
         }
 
-        if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_LEN)
+        if ( (uint8_t) (gSCROLL_POS - 1) < gCAN_IDT_L)
         {
             sprintf(val2, "    0x%02X", gCAN_DATA[gSCROLL_POS-1]);
         }
