@@ -1,3 +1,7 @@
+// Lucky Jordan, Olin Electric Motorsports, 5/13/17
+// Turns programming LED on if pins are pulled low due to
+// sense lines being high
+
 #define F_CPU (4000000L)
 #include <avr/io.h>
 // #include <util/delay.h>
@@ -7,42 +11,47 @@
 ISR(PCINT0_vect) {
     // Set state of led at pin 29 due to
     // interrupt on pin 16
+    // UV sense
     if(PINB & _BV(PB2)) {
-      PORTD |= _BV(PD0);
-    } else {
       PORTD &= ~_BV(PD0);
+    } else {
+      PORTD |= _BV(PD0);
     }
 }
 
 ISR(PCINT1_vect) {
     // Set state of led at pin 25 due to
     // interrupt on pin 17
+    // WX sense
     if(PINC & _BV(PC4)) {
-      PORTC |= _BV(PC7);
-    } else {
       PORTC &= ~_BV(PC7);
+    } else {
+      PORTC |= _BV(PC7);
     }
 }
 
 ISR(PCINT2_vect) {
     // Set state of LEDs at pins 26, 27, and 28 due to
     // interrupts on pins 13, 14, and 15 respectively
+    // EF sense
     if(PIND & _BV(PD5)) {
-      PORTB |= _BV(PB5);
-    } else {
       PORTB &= ~_BV(PB5);
+    } else {
+      PORTB |= _BV(PB5);
     }
 
+    // GH sense
     if(PIND & _BV(PD6)) {
-      PORTB |= _BV(PB6);
-    } else {
       PORTB &= ~_BV(PB6);
+    } else {
+      PORTB |= _BV(PB6);
     }
 
+    // IJ sense
     if(PIND & _BV(PD7)) {
-      PORTB |= _BV(PB7);
-    } else {
       PORTB &= ~_BV(PB7);
+    } else {
+      PORTB |= _BV(PB7);
     }
 }
 
@@ -58,6 +67,44 @@ int main (void) {
     DDRD &= ~_BV(PD5) & ~_BV(PD6) & ~_BV(PD7);
     DDRB &= ~_BV(PB2);
     DDRC &= ~_BV(PC4);
+
+    // --------------------------------->
+    // Check all pins before setting up interrupts and running main loop
+
+    // UV sense
+    if(PINB & _BV(PB2)) {
+      PORTD &= ~_BV(PD0);
+    } else {
+      PORTD |= _BV(PD0);
+    }
+
+    // WX sense
+    if(PINC & _BV(PC4)) {
+      PORTC &= ~_BV(PC7);
+    } else {
+      PORTC |= _BV(PC7);
+    }
+
+    // EF sense
+    if(PIND & _BV(PD5)) {
+      PORTB &= ~_BV(PB5);
+    } else {
+      PORTB |= _BV(PB5);
+    }
+
+    // GH sense
+    if(PIND & _BV(PD6)) {
+      PORTB &= ~_BV(PB6);
+    } else {
+      PORTB |= _BV(PB6);
+    }
+
+    // IJ sense
+    if(PIND & _BV(PD7)) {
+      PORTB &= ~_BV(PB7);
+    } else {
+      PORTB |= _BV(PB7);
+    }
 
     // Set up interrupts
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2); // enable mask registers for interrupts
