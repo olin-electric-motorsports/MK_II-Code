@@ -5,22 +5,22 @@
 // #include "can_api.h"
 
 ISR(PCINT0_vect) {
-    // Set state of led at pin 25 due to
-    // interrupt on pin 17
-    if(PINC & _BV(PC4)) {
-      PORTC |= _BV(PC7);
-    } else {
-      PORTC &= ~_BV(PC7);
-    }
-}
-
-ISR(PCINT1_vect) {
     // Set state of led at pin 29 due to
     // interrupt on pin 16
     if(PINB & _BV(PB2)) {
       PORTD |= _BV(PD0);
     } else {
       PORTD &= ~_BV(PD0);
+    }
+}
+
+ISR(PCINT1_vect) {
+    // Set state of led at pin 25 due to
+    // interrupt on pin 17
+    if(PINC & _BV(PC4)) {
+      PORTC |= _BV(PC7);
+    } else {
+      PORTC &= ~_BV(PC7);
     }
 }
 
@@ -61,8 +61,8 @@ int main (void) {
 
     // Set up interrupts
     PCICR |= _BV(PCIE0) | _BV(PCIE1) | _BV(PCIE2); // enable mask registers for interrupts
-    PCMSK0 |= _BV(PCINT2); // PC4
-    PCMSK1 |= _BV(PCINT12); // PB2
+    PCMSK0 |= _BV(PCINT2); // PB2
+    PCMSK1 |= _BV(PCINT12); // PC4
     PCMSK2 |= _BV(PCINT21) | _BV(PCINT22) | _BV(PCINT23); // PD5, PD6, AND PD7 respectively
 
     for(;;){}
