@@ -3,60 +3,38 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include "can_api.h"
+#include "mux_control.h"
 
 uint8_t FLAGS = 0x00;
 uint8_t total_ic = 1; //number of BMS slaves on the daisy chain
 
-void init_spi_master(void)
-{
-    // Setup SPI IO pins (MOSI and SCK)
-    DDRB |= _BV(PB1) | _BV(PB7);
-
-    // Enable SPI
-    SPCR |=  _BV(SPE) | _BV(MSTR) | _BV(SPR0);
-
-    // Enable alternate SPI (MISO_A, MOSI_A, etc)
-    // Take this out if you are using standard pins!
-    //MCUCR |= _BV(SPIPS);
-}
-
-uint8_t spi_message(uint8_t msg)
-{
-    // Set message
-    SPDR = msg;
-
-    // Wait for transmission to finish
-    while(!(SPSR & (1<<SPIF))); 
-
-    return SPDR;
-}
 
 int main (void) {
-    sei(); //alllow interrupts
+    sei(); //allow interrupts
     // Set PB5,PB6,PC0 to output
     DDRB |= _BV(PB5) | _BV(PB6) | _BV(PB7) | _BV(PB4) | _BV(PB2);
     PORTB ^= _BV(PB5); //have program LEDs alternate
     DDRB &= ~_BV(PB3); //BSPD Current Sense
     DDRC |= _BV(PC0); //program LED
     PORTC &= ~_BV(PC0); //have the LED startup off
-    PORTB |= _BV(PB2); //close relay 
+    PORTB |= _BV(PB2); //close relay
 
     //CAN_init(0,0); //turn on CAN
     //CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
 
+    //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
     PCMSK0 |= _BV(PCINT3); //enable interrupts for INT3
 
     // SPI init
     init_spi_master();
-    
-    uint8_t msg = 0x01;
 
     // Slave Select
     DDRD |= _BV(PD3);
     PORTD |= _BV(PD3); //set master one high
     PORTB |= _BV(PB4); //set slave one low
 
+    // Read LTC 6804 Config
     uint8_t rx_cfg[total_ic][8];
 
 
@@ -72,11 +50,11 @@ int main (void) {
         }
 
         PORTB ^= _BV(PB5) | _BV(PB6);
-        
+
         // PORTB &= ~_BV(PB4); //set CS low
         // uint8_t rec = spi_message(msg);
         // PORTB |= _BV(PB4); //set CS high
-        // msg++;    
+        // msg++;
 
         // Give a delay to the toggle so it is visible
         _delay_ms(200);
@@ -98,35 +76,68 @@ ISR(PCINT0_vect){
     else {
         FLAGS &= ~1;
     }
-    
+
+}
+
+//VOLTAGE MEASUREMENT////////////////////////////////////////////
+
+uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+{
+    wakeup_sleep(TOTAL_IC);
+    error = ltc6811_rdcv(0, TOTAL_IC,cell_codes); // Set to read back all cell voltage registers
+    check_error(error);
+    //I don't really know what to do with them or if this is working right
+
+    //Have to add logic for setting discharge transistors
+    return 0;
+}
+
+//TEMPERATURE MEASUREMENT////////////////////////////////////////
+
+uint8_t read_all_temperatures(void) // Start Cell ADC Measurement
+{
+    //iterate through all six channels on mux 1
+        //convert voltage to temperature
+    //disable mux 1
+    //iterate through all six channels on mux 2
+        //convert voltage to temperature
+    //open BMS relay if we're over temperature
+
+}
+
+uint16_t convert_voltage_to_temperature(uint16_t voltage) //Convert ADC number to temperature
+{
+
+}
+//SPI SETUP//////////////////////////////////////////////////////
+void init_spi_master(void)
+{
+    // Setup SPI IO pins (MOSI and SCK)
+    DDRB |= _BV(PB1) | _BV(PB7);
+
+    // Enable SPI
+    SPCR |=  _BV(SPE) | _BV(MSTR) | _BV(SPR0);
+
+    // Enable alternate SPI (MISO_A, MOSI_A, etc)
+    // Take this out if you are using standard pins!
+    //MCUCR |= _BV(SPIPS);
 }
 
 
-
-
-
-
-
-
-
-/*
- Generic wakeup command to wake isoSPI up out of idle
-*/
-void wakeup_idle(uint8_t total_ic)
+uint8_t spi_message(uint8_t msg)
 {
-  uint8_t i;
-  for (i=0; i<total_ic+1; i++)
-  {
-    PORTB &= ~_BV(PB4); //set CS low
-    _delay_us(2); //Guarantees the isoSPI will be in ready mode
-    PORTB |= _BV(PB4); //set CS high
-  }
+    // Set message
+    SPDR = msg;
+
+    // Wait for transmission to finish
+    while(!(SPSR & (1<<SPIF)));
+
+    return SPDR;
 }
 
 
 /*
  Writes and read a set number of bytes using the SPI port.
-
 */
 void spi_write_read(uint8_t tx_Data[],//array of data to be written on SPI port
                     uint8_t tx_len, //length of the tx data arry
@@ -147,6 +158,22 @@ void spi_write_read(uint8_t tx_Data[],//array of data to be written on SPI port
 
 }
 
+
+//LTC 6804 COMMUNICATION/////////////////////////////////////////////
+
+/*
+ Generic wakeup command to wake isoSPI up out of idle
+*/
+void wakeup_idle(uint8_t total_ic)
+{
+  uint8_t i;
+  for (i=0; i<total_ic+1; i++)
+  {
+    PORTB &= ~_BV(PB4); //set CS low
+    _delay_us(2); //Guarantees the isoSPI will be in ready mode
+    PORTB |= _BV(PB4); //set CS high
+  }
+}
 
 /*
 Reads configuration registers of a ltc6811 daisy chain
@@ -170,7 +197,7 @@ void ltc6811_rdcfg(uint8_t total_ic, //Number of ICs in the system
   cmd[2] = 0x2b;
   cmd[3] = 0x0A;
 
-  wakeup_idle(total_ic); //This will guarantee that the ltc6811 isoSPI port is awake. 
+  wakeup_idle(total_ic); //This will guarantee that the ltc6811 isoSPI port is awake.
 
   PORTB &= ~_BV(PB4); //set CS low
   spi_write_read(cmd, 4, rx_data, (BYTES_IN_REG*total_ic));         //Read the configuration data of all ICs on the daisy chain into
