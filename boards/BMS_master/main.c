@@ -3,6 +3,7 @@
 #include <avr/pgmspace.h> //TODO: Determine if this is necessary
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include <avr/wdt.h>
 #include "can_api.h"
 #include "mux_control.h"
 
@@ -100,6 +101,9 @@ int main (void)
     //PWM init
     init_fan_pwm(0x04);
 
+    //Watchdog init
+    wdt_enable(WDTO_250MS);
+
     // SPI init
     init_spi_master();
 
@@ -141,7 +145,7 @@ int main (void)
             FLAGS &= ~READ_VALS;
         }
 
-        kick_watchdog()
+        wdt_reset();
     }
 
 }
@@ -193,85 +197,7 @@ DDRC |= _BV(PC1); //Enable
 OCR1B = (uint8_t) duty_cycle;
 }
 
-//WATCHDOG /////////////////////////////////////////////////////////////////////
 
-//Init watchdog timer
-void init_watchdog(void)
-{
-    WDTCSR |= _BV(WDIE) | _BV(WDE) | 0b00100000; //setup interrupts and prescaler
-    // Watchdog should kick in at a 4.0s hangup
-}
-
-//Disable watchdog timer
-void disable_watchdog(void)
-{
-    asm {
-        WDT_off:
-             ; Turn off global interrupt
-             cli
-             ; Reset Watchdog Timer
-             wdr
-             ; Clear WDRF in MCUSR
-             in r16, MCUSR
-             andi r16, (0xff & (0<<WDRF))
-             out MCUSR, r16
-             ; Write '1' to WDCE and WDE
-             ; Keep old prescaler setting to prevent unintentional time-out
-             lds r16, WDTCSR
-             ori r16, (1<<WDCE) | (1<<WDE)
-             sts WDTCSR, r16
-             ; Turn off WDT
-             ldi r16, (0<<WDE)
-             sts WDTCSR, r16
-             ; Turn on global interrupt
-             sei
-             ret
-    }
-}
-
-/*
- * Function to kick watchdog and keep our code from hanging for too long. Will require
- * some empirical testing.
- */
-void kick_watchdog(void)
-{
-    //TODO: Figure this out
-}
-
-//VOLTAGE MEASUREMENT///////////////////////////////////////////////////////////
-
-uint8_t read_all_voltages(void) // Measure all cell voltages and compare to standards
-{
-    uint32_t conv_time = 0;
-    uint8_t error = 0;
-
-    wakeup_sleep(TOTAL_IC);
-    ltc6811_adcv(ADC_CONVERSION_MODE,ADC_DCP,CELL_CH_TO_CONVERT); //Start conversion
-    conv_time = ltc6811_pollAdc(); //Wait until conversion finishes
-    error = ltc6811_rdcv(0, TOTAL_IC,cell_codes); // Read values over SPI into cell_codes
-
-    if (error != 0) {
-        return error;
-    }
-    for (uint8_t i = 0; i < TOTAL_IC; i++) { //iterate through ICs
-        for (uint8_t j = 0; i < CELL_CHANNELS; j++) { //iterate through cells
-            if (cell_codes[i][j] < UV_THRESHOLD) {
-                FLAGS |= UNDER_VOLTAGE;
-                return 1;
-            } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
-                FLAGS |= SOFT_OVER_VOLTAGE;
-            } else FLAGS &= ~SOFT_OVER_VOLTAGE;
-
-            if (cell_codes[i][j] > OV_THRESHOLD) {
-                FLAGS |= OVER_VOLTAGE;
-                return 1;
-            }
-        }
-    }
-    //Clear flags on successful execution
-    FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
-    return error;
-}
 
 //TEMPERATURE MEASUREMENT///////////////////////////////////////////////////////
 
