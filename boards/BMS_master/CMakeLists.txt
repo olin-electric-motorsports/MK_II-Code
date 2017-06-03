@@ -6,4 +6,5 @@ set (H_FUSE 0xD7)
 
 project (BMS_Master C)
 
+
 new_board(can_api)
