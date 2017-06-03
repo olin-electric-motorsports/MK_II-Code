@@ -80,6 +80,14 @@ uint16_t aux_codes[TOTAL_IC][AUX_CHANNELS];
  |IC1 GPIO1        |IC1 GPIO2        |IC1 GPIO3        |IC1 GPIO4        |IC1 GPIO5        |IC1 Vref2        |IC2 GPIO1        |IC2 GPIO2      |  .....    |
 */
 
+uint16_t cell_temperatures[TOTAL_IC][CELL_CHANNELS];
+/*!<
+  The cell temperatures will be stored in the cell_temperatures[][12] array in the following format:
+
+  |  cell_temperatures[0][0]| cell_temperatures[0][1] |  cell_temperatures[0][2]|    .....     |  cell_temperatures[0][11]|  cell_temperatures[1][0] | cell_temperatures[1][1]|  .....   |
+  |-------------------------|-------------------------|-------------------------|--------------|--------------------------|--------------------------|------------------------|----------|
+  |IC1 Cell 1               |IC1 Cell 2               |IC1 Cell 3               |    .....     |  IC1 Cell 12             |IC2 Cell 1                |IC2 Cell 2              | .....    |
+****/
 
 int main (void)
 {
@@ -91,12 +99,12 @@ int main (void)
 
     PORTB |= _BV(PB2); //close relay
 
-    //CAN_init(0,0); //turn on CAN
-    //CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single);
-
     //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
     PCMSK0 |= _BV(PCINT3); //enable interrupts for INT3
+
+    //CAN init
+    CAN_init(CAN_ENABLED);
 
     //PWM init
     init_fan_pwm(0x04);
@@ -115,6 +123,10 @@ int main (void)
     // Read LTC 6804 Config
     uint8_t rx_cfg[total_ic][8];
 
+    //Initialize temp and voltage values
+    uint8_t tmp = read_all_voltages();
+    tmp += read_all_temperatures();
+    release(tmp);
 
     while(1) {
 
@@ -139,9 +151,11 @@ int main (void)
 
         if (FLAGS & READ_VALS) {
             uint8_t error = 0;
-            error = read_all_voltages();
-            error = read_all_temperatures();
+            error += read_all_voltages();
+            error += read_all_temperatures();
             //Probably want to do something with error in the future
+            error += transmit_voltages();
+            error += transmit_temperatures();
             FLAGS &= ~READ_VALS;
         }
 
@@ -176,6 +190,65 @@ ISR(TIMER1_OVF_vect)
     FLAGS |= READ_VALS;
 }
 
+
+//TRANSMIT VALUES///////////////////////////////////////////////////////////////
+
+/*!<
+  Cell Voltages will be transmitted in this CAN message, LSB = 0.0001:
+
+  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[6] |            msg[7] |
+  |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
+  |IC/Segment number |first cell index  |msg Cell 1 High   |msg Cell 1 Low    |    .....     |msg Cell 3 High    |msg Cell 3 Low     |
+****/
+uint8_t transmit_voltages()
+{
+    //Declare message variable out here
+    uint8_t[8] msg;
+    for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
+        msg[0] = i; //
+        for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
+            uint8_t idx = i * 3;
+            msg[1] = idx;
+            for (uint8_t k = 0; k < 3; k++) { //3 cells per message
+                uint16_t cell_voltage = cell_codes[i][idx + k];
+                msg[2+k*2] = (uint8_t)(cell_voltage >> 8); //High byte
+                msg[3+k*2] = (uint8_t)cell_voltage;  //Low byte
+            }
+
+            CAN_transmit(1, 0x13, 8, msg);
+        }
+    }
+}
+
+
+
+/*!<
+  Cell temperatures will be transmitted in this CAN message as 16 bit ints, LSB = 0.0001:
+
+  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[6] |            msg[7] |
+  |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
+  |IC/Segment number |first cell index  |msg Cell 1 High   |msg Cell 1 Low    |    .....     |msg Cell 3 High    |msg Cell 3 Low     |
+****/
+uint8_t transmit_temperatures()
+{
+    //Declare message variable out here
+    uint8_t[8] msg;
+    for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
+        msg[0] = i; //
+        for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
+            uint8_t idx = i * 3;
+            msg[1] = idx;
+            for (uint8_t k = 0; k < 3; k++) { //3 cells per message
+                uint16_t cell_voltage = cell_codes[i][idx + k];
+                msg[2+k*2] = (uint8_t)(cell_voltage >> 8); //High byte
+                msg[3+k*2] = (uint8_t)cell_voltage;  //Low byte
+            }
+
+            CAN_transmit(2, 0x14, 8, msg);
+        }
+    }
+}
+
 //READ VALUES TIMER/////////////////////////////////////////////////////////////
 
 void init_read_timer(void) {
@@ -197,11 +270,43 @@ DDRC |= _BV(PC1); //Enable
 OCR1B = (uint8_t) duty_cycle;
 }
 
+//VOLTAGE MEASUREMENT///////////////////////////////////////////////////////////
 
+uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+{
+    uint8_t error = 0;
+    uint32_t time = 0;
+
+    wakeup_sleep(TOTAL_IC);
+
+    ltc6811_adcv(ADC_CONVERSION_MODE,ADC_DCP,CELL_CH_TO_CONVERT);
+    conv_time = ltc6811_pollAdc();
+    error = ltc6811_rdcv(0,TOTAL_IC,cell_codes); //Parse ADC measurements
+
+    for (uint8_t i = 0; i < TOTAL_IC; i++) {
+        for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
+            if (cell_codes[i][j] > OV_THRESHOLD) {
+                FLAGS |= OVER_VOLTAGE;
+                error += 1;
+            } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
+                FLAGS |= SOFT_OVER_VOLTAGE;
+            }
+            if (cell_codes[i][j] < UV_THRESHOLD) {
+                FLAGS |= UNDER_VOLTAGE;
+                error += 1;
+            }
+        }
+    }
+    if (error == 0) {
+        //upon successful execution clear flags
+        FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
+    }
+    return error;
+}
 
 //TEMPERATURE MEASUREMENT///////////////////////////////////////////////////////
 
-uint8_t read_all_temperatures(void) // Start Cell ADC Measurement
+uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
 {
     uint8_t error = 0;
 
@@ -214,14 +319,15 @@ uint8_t read_all_temperatures(void) // Start Cell ADC Measurement
         set_mux_channel(TOTAL_IC, MUX1_ADDRESS, i);
         _delay_us(50) //TODO: This is a blatant guess
 
-        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
+        ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement
         ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
-            if (aux_codes[i][0] < THERM_UV_THRESHOLD) {
+            if (aux_codes[j][0] < THERM_UV_THRESHOLD) {
                 FLAGS |= OVER_TEMP;
-                return 1;
+                error += 1;
             }
+            cell_temperatures[j][i*2 + 1]; //Store temperatures
         }
     }
     //Iterate through second mux
@@ -231,19 +337,22 @@ uint8_t read_all_temperatures(void) // Start Cell ADC Measurement
         set_mux_channel(TOTAL_IC, MUX2_ADDRESS, i);
         _delay_us(50) //TODO: This is a blatant guess
 
-        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
+        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_GPIO1); //start ADC measurement
         ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
             if (aux_codes[i][0] < THERM_UV_THRESHOLD) {
                 FLAGS |= OVER_TEMP;
-                return 1;
+                error += 1;
             }
+            cell_temperatures[j][i*2]; //Store temperatures
         }
     }
 
-    //upon successful execution clear flags
-    FLAGS &= ~OVER_TEMP
+    if (error == 0) {
+        //upon successful execution clear flags
+        FLAGS &= ~OVER_TEMP;
+    }
     return error;
 
 }
