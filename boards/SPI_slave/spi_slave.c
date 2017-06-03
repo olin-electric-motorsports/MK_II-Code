@@ -1,4 +1,3 @@
-#define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
@@ -22,7 +21,7 @@ uint8_t spi_message(uint8_t msg)
     SPDR = msg;
 
     // Wait for transmission to finish
-    while(!(SPSR & (1<<SPIF))); 
+    while(!(SPSR & (1<<SPIF)));
 
     return SPDR;
 }

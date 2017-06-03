@@ -110,7 +110,7 @@ int main (void)
     PCMSK0 |= _BV(PCINT3); //enable interrupts for INT3
 
     //CAN init
-    CAN_init(CAN_ENABLED);
+    CAN_init(CAN_ENABLE);
 
     //PWM init
     init_fan_pwm(0x04);
