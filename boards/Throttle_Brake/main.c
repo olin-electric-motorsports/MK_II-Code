@@ -4,6 +4,11 @@
 #include <avr/interrupt.h>
 #include "can_api.h"
 
+// Throttle 1Out is pin 17, which is ADC8 which is MUX 01000 = 0x08
+// Throttle 1Out is pin 18, which is ADC9 which is MUX 01001 = 0x09
+
+// BSPD BSO is pin 28, which is ADC4 which is MUX 00100 = 0x04
+
 uint8_t FLAG = 0x00;
 
 // ISR to flag when the brake is pressed
@@ -18,7 +23,39 @@ ISR(PCINT2_vect){
   }
 }
 
+uint8_t[] brakePlausibility(uint16_t rThrottle[], uint16_t rBrake, uint8_t currentMSG[])
+{
+  if(rBrake != 0)
+  {
+    // Set the torque command for the motor controller to 0 torque
+  }
+}
+
+uint8_t[] throttleComparison(uint16_t rThrottle[], uint16_t legalDeviation, uint8_t throttleMin, uint8_t throttleMax, uint8_t currentMSG[])
+{
+  //These two if statements check if the two throttle values are within the 10% legal deviation of each other
+  if((rThrottle[0] > rThrottle[1] + legalDeviation) || (rThrottle[1] > rThrottle[0] + legalDeviation) || rThrottle[0] < throttleMin || rThrottle[0] > throttleMax || rThrottle[1] < throttleMin || rThrottle[1] > throttleMax)
+  {
+    currentMSG[4] = 0xDF;
+    currentMSG[5] = 0x00;
+  }
+  // If two throttle values were in the legal devaition the original msg is returned
+  return currentMSG[];
+
+}
+
 int main (void) {
+  uint8_t channels[] = {8,9};
+
+  uint8_t throttleMin;  // our min throttle value, found by experimentation
+  uint8_t throttleMax;  // our max throttle value, found by experimentation
+
+  uint8_t legalDeviation;  // 10% of the throttle range
+
+  /* Brake and Throttle states */
+  uint16_t rBrake = 0x00;
+  uint16_t rThrottle[] = {0x00,0x00};
+
   sei();
   // set up for throttle
 
@@ -48,7 +85,7 @@ int main (void) {
   CAN_init(CAN_ENABLED);
 
   // Set the array msg to be zero when brake nor pressed
-  uint8_t msg[] = {0x00, 0x00, 0x00};
+  uint8_t msg[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 
   DDRC |= _BV(PC7);
@@ -60,37 +97,59 @@ int main (void) {
 
   while(1)
   {
-    // PWM throttle
+    //OCR0B = (uint8_t) (reading >> 2); //shifts the 10 bit two to the right to make 6
+
+    /* Reads and stores data from ADC for both throttle potentiometers*/
+    uint8_t i;
+    for (i = 0; i <2; i++)
+    {
+      //Switches ADC input channel
+      ADMUX &= ~(0x1F);
+      ADMUX |= channels[i];
+
+      //Read from ADC
+      ADCSRA |= _BV(ADSC);
+      //wait for ADC reading
+      while(bit_is_set(ADCSRA,ADSC));
+      rThrottle[i] = ADC;
+    }
+
+    /* Reads and stores data from ADC for brake */
+    ADMUX &= ~(0x1F); //Switches ADC input channel
+    ADMUX |= 4;
 
     //Read from ADC
-    ADCSRA |=  _BV(ADSC);
-    //Wait for ADC reading
-    while(bit_is_set(ADCSRA, ADSC));
-    uint16_t reading = ADC;
+    ADCSRA |= _BV(ADSC);
+    //wait for ADC reading
+    while(bit_is_set(ADCSRA,ADSC));
+    rBrake = ADC;
 
-    OCR0B = (uint8_t) (reading >> 2); //shifts the 10 bit two to the right to make 6
-
-    // here is where you will in a for loop read in the value of the ADC, store the
-    //previous one and compare the values based on the rules you need to change the ADCMUX to
-    //be each of your specific bits and then you need to swap between each potenciometer values
-    //based on which potentiometer bec we are cul and have 2.
-
-    //swap AMMUX between the two diff throttle bits. Save the ADC and compare the values
-
+    /********* CAN Communication Code **************/
+    /*
     // statements to change the CAN Messsage of the brake
     if (FLAG & 0x01){ // if the brake is pressed flag and set 1set message segment to 0xFF
-      msg[0] = 0xFF;
-      PORTB |= _BV(PB2); //turns on the led
-
-    }
-    else{ // if the brake is not pressed the message stays all zeros
-      msg[0] = 0x00;
-      PORTB &= ~_BV(PB2); //turns off the led
-    }
-      CAN_transmit(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg );
-      _delay_ms(1); //delay so the car doesn't flip shit
+    msg[0] = 0xFF;
+    PORTB |= _BV(PB2); //turns on the led
 
   }
+  else{ // if the brake is not pressed the message stays all zeros
+  msg[0] = 0x00;
+  PORTB &= ~_BV(PB2); //turns off the led
+}
+*/
+
+    msg = throttleComparison(rThrottle,legalDeviation, throttleMin, throttleMax, msg);
+
+    msg[0] = rThrottle[0] & 11110000;
+    msg[1] = rThrottle[0] & 00001111;
+
+    msg[2] = rThrottle[1] & 11110000;
+    msg[3] = rThrottle[1] & 00001111;
+
+    CAN_transmit(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg);
+    _delay_ms(1); //delay so the car doesn't flip shit
+
+  } // end of while loop
 
 
 }
