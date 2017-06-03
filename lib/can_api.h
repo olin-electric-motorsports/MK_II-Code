@@ -24,7 +24,7 @@
 #define CAN_IDT_GLOBAL_L          ((uint8_t) 8)
 #define CAN_IDT_PANIC_L           ((uint8_t) 1)
 
-#define CAN_IDT_THROTTLE_L        ((uint8_t) 7)
+#define CAN_IDT_THROTTLE_L        ((uint8_t) 8)
 #define CAN_IDT_BMS_MASTER_L      ((uint8_t) 8)
 #define CAN_IDT_AIR_CONTROL_L     ((uint8_t) 8)
 #define CAN_IDT_TRANSOM_L         ((uint8_t) 1)
@@ -52,7 +52,13 @@
 #define CAN_ERR_DLCW          2
 #define CAN_ERR_UNKNOWN       3
 
-
+/* Mob Definitions */
+#define CAN_MOB_0  0
+#define CAN_MOB_1  1
+#define CAN_MOB_2  2
+#define CAN_MOB_3  3
+#define CAN_MOB_4  4
+#define CAN_MOB_5  5
 /* Function Prototypes */
 
 // Initialize CAN system based on MODE of operation

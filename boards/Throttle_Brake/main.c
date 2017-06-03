@@ -11,6 +11,10 @@
 
 uint8_t FLAG = 0x00;
 
+uint8_t throttleMin;  // our min throttle value, found by experimentation
+uint8_t throttleMax;  // our max throttle value, found by experimentation
+uint8_t legalDeviation;  // 10% of the throttle range
+
 // ISR to flag when the brake is pressed
 ISR(PCINT2_vect){
   if (bit_is_set(PINC,PC6))
@@ -31,26 +35,28 @@ uint8_t[] brakePlausibility(uint16_t rThrottle[], uint16_t rBrake, uint8_t curre
   }
 }
 
-uint8_t[] throttleComparison(uint16_t rThrottle[], uint16_t legalDeviation, uint8_t throttleMin, uint8_t throttleMax, uint8_t currentMSG[])
+uint8_t[] throttleComparison(uint16_t rThrottle[], uint8_t currentMSG[])
 {
   //These two if statements check if the two throttle values are within the 10% legal deviation of each other
   if((rThrottle[0] > rThrottle[1] + legalDeviation) || (rThrottle[1] > rThrottle[0] + legalDeviation) || rThrottle[0] < throttleMin || rThrottle[0] > throttleMax || rThrottle[1] < throttleMin || rThrottle[1] > throttleMax)
   {
-    currentMSG[4] = 0xDF;
-    currentMSG[5] = 0x00;
+    inverterMSG[5] = 0x00;
   }
   // If two throttle values were in the legal devaition the original msg is returned
-  return currentMSG[];
+  return inverterMSG;
 
 }
 
+uint8_t[] setInverterMSG(uint16_t rThrottle[], uint8_t currentMSG[])
+{
+  return currentMSG;
+}
+
 int main (void) {
+  uint8_t state = 0;
+
+  uint8_t startUpConditions = 0x00;
   uint8_t channels[] = {8,9};
-
-  uint8_t throttleMin;  // our min throttle value, found by experimentation
-  uint8_t throttleMax;  // our max throttle value, found by experimentation
-
-  uint8_t legalDeviation;  // 10% of the throttle range
 
   /* Brake and Throttle states */
   uint16_t rBrake = 0x00;
@@ -87,6 +93,10 @@ int main (void) {
   // Set the array msg to be zero when brake nor pressed
   uint8_t msg[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
+  /**** initialize the array inverterMSG ****/
+  //inialized to be disabled, direction be clockwise("foward"), torque and speed to be 0, discharge disabled,torque limits set to default EEPROM parameters
+  uint8_t inverterMSG[] = {0x00, 0x00, 0x00, 0x00, 0b00000000, 0x00, 0x00, 0x00};
+
 
   DDRC |= _BV(PC7);
   DDRB |= _BV(PB2);
@@ -97,6 +107,25 @@ int main (void) {
 
   while(1)
   {
+    /**** Pre-Startup State ****/
+    if(state==0)
+    {
+
+    }
+    /**** Startup State ****/
+    else if(state==1)
+    {
+
+      /**** Starts Up The Inverter ****/
+      CAN_transmit(CAN_MOB_1, 0xC0, 8, inverterMSG);  // sets inverter to be disabled(required to be enabled)
+      inverterMSG[5] = 0b00000001; // sets inverterMSG to enable inverter
+      CAN_transmit(CAN_MOB_1, 0xC0, 8, inverterMSG);  // sets inverter to be enabled
+    }
+    /**** Post-Startup State ****/
+    else if(state==2)
+    {
+
+    }
     //OCR0B = (uint8_t) (reading >> 2); //shifts the 10 bit two to the right to make 6
 
     /* Reads and stores data from ADC for both throttle potentiometers*/
@@ -138,7 +167,7 @@ int main (void) {
 }
 */
 
-    msg = throttleComparison(rThrottle,legalDeviation, throttleMin, throttleMax, msg);
+    msg = throttleComparison(rThrottle, msg);
 
     msg[0] = rThrottle[0] & 11110000;
     msg[1] = rThrottle[0] & 00001111;
@@ -146,7 +175,8 @@ int main (void) {
     msg[2] = rThrottle[1] & 11110000;
     msg[3] = rThrottle[1] & 00001111;
 
-    CAN_transmit(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg);
+    CAN_transmit(CAN_MOB_0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg);
+    CAN_transmit(CAN_MOB_1, 0xC0, 8, inverterMSG)
     _delay_ms(1); //delay so the car doesn't flip shit
 
   } // end of while loop
