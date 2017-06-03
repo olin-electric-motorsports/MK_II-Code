@@ -4,8 +4,10 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <avr/wdt.h>
+#include "LTC_defs.h"
 #include "can_api.h"
-#include "mux_control.h"
+#include "i2c.h"
+
 
 // OEM defs
 volatile uint8_t FLAGS = 0x00;
@@ -27,6 +29,8 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x49
 
 //LTC68xx defs
+#define TOTAL_IC 12
+
 #define ENABLED 1
 #define DISABLED 0
 #define CELL_CHANNELS 12
@@ -35,6 +39,8 @@ volatile uint8_t FLAGS = 0x00;
 #define CELL 1
 #define AUX 2
 #define STAT 3
+
+
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
@@ -412,6 +418,20 @@ void spi_write_read(uint8_t tx_Data[],//array of data to be written on SPI port
     rx_data[i] = (uint8_t)spi_message(0x00);
   }
 
+}
+
+//MUX HELPER FUNCTIONS//////////////////////////////////////////////////////////
+
+void set_mux_channel(uint8_t total_ic, uint8_t i2c_address, uint8_t channel)
+{
+	uint8_t command = 0x08 | channel;
+	write_i2c(total_ic, i2c_address, command, 0, 0); //(total_ic, address, command, data, data_length)
+}
+
+void mux_disable(uint8_t total_ic, uint8_t i2c_address)
+{
+	uint8_t command = 0x00;
+	write_i2c(total_ic, i2c_address, command, 0, 0); //(total_ic, address, command, data, data_length)
 }
 
 
