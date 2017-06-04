@@ -65,7 +65,7 @@
 uint8_t CAN_init ( uint8_t mode );
 
 // Transmit a message on the CAN bus
-uint8_t CAN_transmit ( uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[] );
+uint8_t CAN_transmit ( uint8_t mob, uint16_t ident, uint8_t msg_length, uint8_t msg[] );
 
 // Quick check to see if transmitted message sent correclty
 uint8_t CAN_transmit_success ( uint8_t mob );

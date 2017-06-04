@@ -229,11 +229,11 @@ int main (void) {
     msg[1] = (uint8_t) rThrottle[0];
 
     msg[2] = (uint8_t)(rThrottle[1] >> 8);
-    msg[3] = (uint8_t) rThrottle[0];
+    msg[3] = (uint8_t) rThrottle[1];
 
     if(canCounter == 100)
     {
-      CAN_transmit(CAN_MOB_0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, msg);
+      CAN_transmit(CAN_MOB_0, 0xC0, CAN_IDT_THROTTLE_L, msg);
       canCounter = 0;
     }
     canCounter++;

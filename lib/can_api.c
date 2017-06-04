@@ -65,7 +65,7 @@ uint8_t CAN_init (uint8_t mode)
 }
 
 
-uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
+uint8_t CAN_transmit (uint8_t mob, uint16_t ident, uint8_t msg_length, uint8_t msg[])
 {
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
@@ -81,8 +81,8 @@ uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t ms
 
     // Set MOb ID
     //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
-    CANIDT1 = ident; // node ID
-    CANIDT2 = 0x00;
+    CANIDT1 = (uint8_t)(ident >> 3); // node ID
+    CANIDT2 = (uint8_t)(ident << 5);
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
 
