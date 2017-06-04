@@ -77,3 +77,13 @@ const uint16_t crc15Table[256] PROGMEM = {0x0,0xc599, 0xceab, 0xb32, 0xd8cf, 0x1
                                0x2d02, 0xa76f, 0x62f6, 0x69c4, 0xac5d, 0x7fa0, 0xba39, 0xb10b, 0x7492, 0x5368, 0x96f1, 0x9dc3,
                                0x585a, 0x8ba7, 0x4e3e, 0x450c, 0x8095
                                          };
+
+void wrcomm(uint8_t total_ic, //The number of ICs being written to
+uint8_t comm[][6] //A two dimensional array of the comm data that will be written
+);
+void stcomm(void);
+int8_t rdcomm(uint8_t total_ic, //Number of ICs in the system
+    uint8_t r_comm[][8] //A two dimensional array that the function stores the read configuration data.
+);
+void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len);
+void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len);

@@ -1,5 +1,3 @@
-#define F_CPU 4000000L
-
 #include <avr/io.h>
 #include <avr/pgmspace.h> //TODO: Determine if this is necessary
 #include <util/delay.h>
@@ -7,7 +5,6 @@
 #include <avr/wdt.h>
 #include "LTC_defs.h"
 #include "can_api.h"
-#include "i2c.h"
 #include "main.h"
 
 // OEM defs
@@ -212,7 +209,7 @@ void transmit_voltages(void)
     for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
         msg[0] = i; //
         for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
-            uint8_t idx = i * 3;
+            uint8_t idx = j * 3;
             msg[1] = idx;
             for (uint8_t k = 0; k < 3; k++) { //3 cells per message
                 uint16_t cell_voltage = cell_codes[i][idx + k];
@@ -241,7 +238,7 @@ void transmit_temperatures(void)
     for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
         msg[0] = i; //s
         for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
-            uint8_t idx = i * 3;
+            uint8_t idx = j * 3;
             msg[1] = idx;
             for (uint8_t k = 0; k < 3; k++) { //3 cells per message
                 uint16_t cell_voltage = cell_codes[i][idx + k];
@@ -332,7 +329,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
                 FLAGS |= OVER_TEMP;
                 error += 1;
             }
-            cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; //Store temperatures
+            cell_temperatures[j][i*2 +1] = aux_codes[j][0]; //Store temperatures
         }
     }
     mux_disable(TOTAL_IC, MUX1_ADDRESS);
@@ -916,6 +913,330 @@ void o_ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register i
   PORTB |= _BV(PB4); //set CS high
 
 }
+
+/*
+Writes the COMM registers of a ltc6811 daisy chain
+*/
+void wrcomm(uint8_t total_ic, //The number of ICs being written to
+    uint8_t comm[][6] //A two dimensional array of the comm data that will be written
+)
+{
+    const uint8_t BYTES_IN_REG = 6;
+    const uint8_t CMD_LEN = 4+(8*total_ic);
+    uint8_t *cmd;
+    uint16_t comm_pec;
+    uint16_t cmd_pec;
+    uint8_t cmd_index; //command counter
+
+    cmd = (uint8_t *)malloc(CMD_LEN*sizeof(uint8_t));
+
+    cmd[0] = 0x07;
+    cmd[1] = 0x21;
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (uint8_t)(cmd_pec >> 8);
+    cmd[3] = (uint8_t)(cmd_pec);
+
+    cmd_index = 4;
+    for (uint8_t current_ic = total_ic; current_ic > 0; current_ic--)       // executes for each ltc6811 in daisy chain, this loops starts with
+    {
+        // the last IC on the stack. The first configuration written is
+        // received by the last IC in the daisy chain
+
+        for (uint8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) // executes for each of the 6 bytes in the CFGR register
+        {
+            // current_byte is the byte counter
+
+            cmd[cmd_index] = comm[current_ic-1][current_byte];            //adding the config data to the array to be sent
+            cmd_index = cmd_index + 1;
+        }
+        comm_pec = (uint16_t)pec15_calc(BYTES_IN_REG, &comm[current_ic-1][0]);    // calculating the PEC for each ICs configuration register data
+        cmd[cmd_index] = (uint8_t)(comm_pec >> 8);
+        cmd[cmd_index + 1] = (uint8_t)comm_pec;
+        cmd_index = cmd_index + 2;
+    }
+
+    wakeup_idle(total_ic);                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
+    PORTB &= ~_BV(PB4); //set CS low
+    spi_write_array(cmd, CMD_LEN);
+    PORTB |= _BV(PB4); //set CS high
+    free(cmd);
+}
+
+/*
+Shifts data in COMM register out over ltc6811 SPI/I2C port
+*/
+void stcomm(void)
+{
+
+    uint8_t cmd[4];
+    uint16_t cmd_pec;
+
+    cmd[0] = 0x07;
+    cmd[1] = 0x23;
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (uint8_t)(cmd_pec >> 8);
+    cmd[3] = (uint8_t)(cmd_pec);
+
+    //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
+    PORTB &= ~_BV(PB4);
+    spi_write_array(cmd, 4);         //Read the configuration data of all ICs on the daisy chain into
+    for (int i = 0; i<9; i++)
+    {
+        spi_message(0xFF);
+    }
+    PORTB |= _BV(PB4);
+
+}
+
+/*
+Reads COMM registers of a ltc6811 daisy chain
+*/
+int8_t rdcomm(uint8_t total_ic, //Number of ICs in the system
+    uint8_t r_comm[][8] //A two dimensional array that the function stores the read configuration data.
+)
+{
+    const uint8_t BYTES_IN_REG = 8;
+
+    uint8_t cmd[4];
+    uint8_t *rx_data;
+    int8_t pec_error = 0;
+    uint16_t cmd_pec;
+    uint16_t data_pec;
+    uint16_t received_pec;
+
+    rx_data = (uint8_t *) malloc((8*total_ic)*sizeof(uint8_t));
+
+    cmd[0] = 0x07;
+    cmd[1] = 0x22;
+    cmd_pec = pec15_calc(2, cmd);
+    cmd[2] = (uint8_t)(cmd_pec >> 8);
+    cmd[3] = (uint8_t)(cmd_pec);
+
+    //wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
+    PORTB &= ~_BV(PB4); //set CS low
+    spi_write_read(cmd, 4, rx_data, (BYTES_IN_REG*total_ic));         //Read the configuration data of all ICs on the daisy chain into
+    PORTB |= _BV(PB4); //set CS high
+
+    for (uint8_t current_ic = 0; current_ic < total_ic; current_ic++)       //executes for each ltc6811 in the daisy chain and packs the data
+    {
+        //into the r_comm array as well as check the received Config data
+        //for any bit errors
+        for (uint8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++)
+        {
+            r_comm[current_ic][current_byte] = rx_data[current_byte + (current_ic*BYTES_IN_REG)];
+        }
+        received_pec = (r_comm[current_ic][6]<<8) + r_comm[current_ic][7];
+        data_pec = pec15_calc(6, &r_comm[current_ic][0]);
+        if (received_pec != data_pec)
+        {
+            pec_error = -1;
+        }
+    }
+
+    free(rx_data);
+    return(pec_error);
+}
+
+void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
+{
+    //Serial.println("In write_i2c.");
+    uint8_t START = 0x60;
+//    uint8_t STOP = 0x01;
+//    uint8_t ACK = 0x00;
+    uint8_t NACK = 0x08;
+    uint8_t BLANK = 0x00;
+    uint8_t NO_TRANSMIT = 0x70;
+    uint8_t NACK_STOP = 0x09;
+
+
+    uint8_t loop_count;
+    uint8_t remainder = 0;
+    uint8_t transmitted_bytes = 0;
+    uint8_t data_counter = 0;
+    uint8_t comm[1][6];
+    uint8_t rx_comm[1][8];
+    if (((data_len)%3) == 0)
+    {
+        loop_count = ((data_len)/3);
+    }
+    else
+    {
+        loop_count = ((data_len)/3);
+        remainder = data_len - (loop_count*3);
+        loop_count++;
+    }
+
+    address = address << 1; // convert 7 bit address to 8 bits
+
+    comm[0][0] = START;//NO_TRANSMIT; //
+    comm[0][1] = NACK_STOP;//BLANK ; //
+    comm[0][2] = START | (address >> 4); //
+    comm[0][3] = (address<<4) | NACK ; //
+    comm[0][4] = BLANK | (command >>4);
+    comm[0][5] = (command<<4) | NACK;
+
+    if (loop_count == 0) { // if there is no data, free up the bus
+        comm[0][5] = (command<<4) | NACK_STOP;
+        //Serial.println("Adding NACK_STOP since there is no data");
+    }
+
+    //  Serial.print("comm: ");
+    //  for(uint8_t i=0; i < 6; i++){
+    //    Serial.print(comm[0][i],HEX);
+    //    Serial.print(", ");
+    //  }
+    //  Serial.println();
+
+
+    wrcomm(total_ic,comm);
+    stcomm();
+    rdcomm(total_ic,rx_comm);
+
+    //  Serial.print("rx_comm: ");
+    //  for(uint8_t i=0; i < 6; i++){
+    //    Serial.print(rx_comm[0][i],HEX);
+    //    Serial.print(", ");
+    //  }
+    //  Serial.println();
+    //
+    //  Serial.println("sent command");
+
+    transmitted_bytes = 0;
+    for (uint8_t i=0; i<loop_count; i++)
+    {
+        if ((i == (loop_count-1)) && (remainder != 0)) //need to pad becuase we don't have multiple of 3 data bytes
+        {
+            for (uint8_t k=0; k<remainder; k++)
+            {
+                comm[0][transmitted_bytes] = BLANK + (data[data_counter] >> 4); //
+                if (k!=(remainder-1))comm[0][transmitted_bytes+1] = (data[data_counter]<<4) | NACK ; //
+                else comm[0][transmitted_bytes+1] = (data[data_counter]<<4) | NACK_STOP;
+                data_counter++;
+                transmitted_bytes = transmitted_bytes +2;
+            }
+            for (uint8_t k=0; k<(3-remainder); k++)
+            {
+                comm[0][transmitted_bytes] = NO_TRANSMIT; //
+                comm[0][transmitted_bytes+1] =  BLANK ; //
+                transmitted_bytes = transmitted_bytes + 2;
+            }
+            wrcomm(1,comm);
+            stcomm();
+        }
+        else                                      //don't need to pad because we have a multiple of 3 data bytes
+        {
+            for (uint8_t k=0; k<3; k++)
+            {
+                comm[0][k*2] = BLANK + (data[data_counter] >> 4); //
+                if (k!=2){comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK ;} //
+                else if(remainder!=0){ comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK ;}
+                else { comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK_STOP ;}
+                data_counter++;
+            }
+            wrcomm(1,comm);
+            stcomm();
+        }
+    }
+
+}
+
+void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *data, uint8_t data_len)
+{
+    uint8_t START = 0x60;
+    uint8_t ACK = 0x00;
+    uint8_t NACK = 0x08;
+    uint8_t BLANK = 0x00;
+    uint8_t NO_TRANSMIT = 0x70;
+    uint8_t NACK_STOP = 0x09;
+
+    uint8_t loop_count;
+    uint8_t transmitted_bytes =0;
+    uint8_t remainder=0;
+    uint8_t data_counter = 0;
+    uint8_t rx_data = 0;
+
+    uint8_t comm[1][6];
+    uint8_t rx_comm[1][8];
+    if (((data_len)%3)==0)
+    {
+        loop_count = ((data_len)/3);
+    }
+    else
+    {
+        loop_count = ((data_len)/3);
+        remainder = data_len - (loop_count*3);
+        loop_count++;
+    }
+
+    address = address << 1; //convert 7 bit address to 8 bits
+
+    comm[0][0] = START + (address >> 4); //
+    comm[0][1] = ((address)<<4) + NACK ; //
+    comm[0][2] = BLANK + (command >>4);
+    comm[0][3] = (command<<4) + NACK;
+    comm[0][4] = START + (address >> 4); //
+    comm[0][5] = (address<<4) + 0x10 + ACK ; //
+
+    wrcomm(total_ic,comm);
+    rdcomm(total_ic,rx_comm);
+    stcomm();
+
+    for (int i =0; i<loop_count; i++)
+    {
+        if ((i == (loop_count-1)) && (remainder != 0))
+        {
+            for (int k=0; k<remainder; k++)
+            {
+                comm[0][transmitted_bytes] = BLANK + 0x0F; //
+                if (k!=(remainder-1))comm[0][transmitted_bytes+1] = 0xF0 + ACK ; //
+                else comm[0][transmitted_bytes+1] = 0xF0 + NACK_STOP;
+                data_counter++;
+                transmitted_bytes = transmitted_bytes +2;
+            }
+            for (int k=0; k<(3-remainder); k++)
+            {
+                comm[0][transmitted_bytes] = NO_TRANSMIT; //
+                comm[0][transmitted_bytes+1] =  ACK ; //
+                transmitted_bytes = transmitted_bytes + 2;
+            }
+
+            wrcomm(1,comm);
+            stcomm();
+            rdcomm(1,rx_comm);
+            data_counter=0;
+            for (int k=0; k<remainder; k++)
+            {
+                data[rx_data] = ((rx_comm[0][data_counter]&0x0F)<<4)|((rx_comm[0][data_counter+1]&0xF0)>>4); //
+                //Serial.println(data[rx_data],HEX);
+                rx_data++;
+                data_counter = data_counter+2;
+            }
+        }
+        else
+        {
+            for (uint8_t k=0; k<3; k++)
+            {
+                comm[0][(k*2)] = BLANK + 0x0F; //
+                if (k!=2)comm[0][(k*2)+1] = 0xF0 + ACK ; //
+                else if(remainder!=0){ comm[0][(k*2)+1] = 0xF0 | ACK ;}
+                else { comm[0][(k*2)+1] = 0xF0 | NACK_STOP ;}
+                data_counter++;
+            }
+            wrcomm(1,comm);
+            stcomm();
+            rdcomm(1,rx_comm);
+            data_counter =0;
+            for (int k=0; k<3; k++)
+            {
+                data[rx_data] = ((rx_comm[0][data_counter]&0x0F)<<4) | ((rx_comm[0][data_counter+1]&0xF0)>>4); //
+                rx_data++;
+                data_counter = data_counter+2;
+            }
+        }
+    }
+
+}
+
 
 /*
 Calculates  and returns the CRC15
