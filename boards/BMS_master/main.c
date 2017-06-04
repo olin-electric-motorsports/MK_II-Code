@@ -38,6 +38,10 @@ volatile uint8_t FLAGS = 0x00;
 #define AUX 2
 #define STAT 3
 
+#define LED_ORANGE PC4
+#define LED_GREEN PC5
+#define EXT_LED_PORT PORTC
+
 
 
 //ADC Command Configurations
@@ -96,7 +100,8 @@ int main (void)
     // Set PB5,PB6,PC0 to output
     DDRB |= _BV(PB5) | _BV(PB6) | _BV(PB7) | _BV(PB4) | _BV(PB2);
     DDRB &= ~_BV(PB3); //BSPD Current Sense
-    DDRC |= _BV(PC0); //program LED
+    DDRC |= _BV(PC0) | _BV(PC4) | _BV(PC5); //program LED
+    PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN));
 
     PORTB |= _BV(PB2); //close relay
 
@@ -106,6 +111,9 @@ int main (void)
 
     //CAN init
     CAN_init(CAN_ENABLED);
+
+    //Read Timer init
+    init_read_timer();
 
     //PWM init
     init_fan_pwm(0x04);
@@ -122,13 +130,16 @@ int main (void)
     PORTB |= _BV(PB4); //set slave one low
 
     // Read LTC 6804 Config
-//    uint8_t rx_cfg[total_ic][8];
+    // uint8_t rx_cfg[total_ic][8];
 
     //Initialize temp and voltage values
     uint8_t tmp = read_all_voltages();
-    tmp += read_all_temperatures();
+    //tmp += read_all_temperatures();
+
+  
 
     while(1) {
+
 
         PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
         PORTC &= ~_BV(PROG_LED_3);
@@ -150,12 +161,13 @@ int main (void)
         }
 
         if (FLAGS & READ_VALS) {
+            EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
             error += read_all_voltages();
-            error += read_all_temperatures();
+            //error += read_all_temperatures();
             //Probably want to do something with error in the future
             transmit_voltages();
-            transmit_temperatures();
+            //transmit_temperatures();
             FLAGS &= ~READ_VALS;
         }
 
@@ -187,6 +199,7 @@ ISR(PCINT0_vect)
 ISR(TIMER1_OVF_vect)
 {
     FLAGS |= READ_VALS;
+    //PORTC ^= _BV(PC5);
 }
 
 
@@ -214,8 +227,11 @@ void transmit_voltages(void)
             }
 
             CAN_transmit(1, 0x13, 8, msg);
+            _delay_us(200);
         }
     }
+    EXT_LED_PORT ^= _BV(LED_ORANGE);
+    
 }
 
 
@@ -249,6 +265,7 @@ void transmit_temperatures(void)
 //READ VALUES TIMER/////////////////////////////////////////////////////////////
 
 void init_read_timer(void) {
+    PORTC |= _BV(PC5);
     TCCR1B |= _BV(CS11) | _BV(CS10); //Set prescaler to 1/64 (approximately 2 seconds)
     TIMSK1 |= 1; // Enable overflow interrupts (set TOIE)
 }
