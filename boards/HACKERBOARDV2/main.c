@@ -1,8 +1,9 @@
-#define F_CPU (4000000L)
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
 #include "lcd.h"
 #include "pinDefinitions.h"
 
@@ -32,13 +33,25 @@ void initIO(void)
 
     // Set Prescaler ( 32 )
     ADCSRA |= _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0);
-    
+
     ADCSRB |= _BV(AREFEN);
     ADMUX |= 3;
     ADMUX |= _BV(REFS0);
 }
 
 
+<<<<<<< HEAD
+=======
+void grab_new_adc(void)
+{
+    ADCSRA |= _BV(ADSC);
+    while (bit_is_set(ADCSRA, ADSC));
+
+    ADC_VALUE = ADC;
+}
+
+
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
 ISR(PCINT0_vect)
 {
     // Button 2
@@ -79,12 +92,16 @@ ISR(PCINT2_vect)
         BUTTON_STATES |= _BV(BUTTON1);
     }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
     // Update Display
     FLAGS |= _BV(UPDATE_DISPLAY);
 }
 
 
+<<<<<<< HEAD
 void grab_new_adc(void)
 {
     ADCSRA |= _BV(ADSC);
@@ -94,6 +111,8 @@ void grab_new_adc(void)
 }
 
 
+=======
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
 void update_display(void)
 {
     lcd_clrscr();
@@ -104,6 +123,22 @@ void update_display(void)
 }
 
 
+<<<<<<< HEAD
+=======
+void led_follow_button(volatile uint8_t *ledPort, uint8_t ledPin, uint8_t button)
+{
+    if( bit_is_set( BUTTON_STATES, button ) )
+    {
+        *ledPort |= _BV(ledPin);
+    }
+    else
+    {
+        *ledPort &= ~_BV(ledPin);
+    }
+}
+
+
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
 int main (void)
 {
     sei(); // Allow interrupts
@@ -117,8 +152,17 @@ int main (void)
     PORT_LED2 |= _BV(LED2);
     PORT_LED3 |= _BV(LED3);
 
+<<<<<<< HEAD
 
     lcd_puts("Hello World!\nNewLine!");
+=======
+    lcd_puts("Hello World!");
+
+    // SPI Initialization
+    for( int i =0; i < 3; i++){
+        PORT_LED1 ^= _BV(LED1);
+    }
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
 
     while (1)
     {
@@ -127,6 +171,7 @@ int main (void)
             update_display();
             FLAGS &= ~_BV(UPDATE_DISPLAY);
         }
+<<<<<<< HEAD
 
         if( bit_is_set( BUTTON_STATES, BUTTON1 ) )
         {
@@ -154,6 +199,11 @@ int main (void)
         {
             PORT_LED3 &= ~_BV(LED3);
         }
+=======
+
+        led_follow_button( &PORT_LED1, LED1, BUTTON1 );
+        led_follow_button( &PORT_LED2, LED2, BUTTON2 );
+        led_follow_button( &PORT_LED3, LED3, BUTTON3 );
+>>>>>>> 54c7564ee81a0444a04f9ecaab469967ae718886
     }
 }
-
