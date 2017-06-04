@@ -169,6 +169,8 @@ int main (void)
             transmit_voltages();
             //transmit_temperatures();
             FLAGS &= ~READ_VALS;
+            uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
+            CAN_transmit(1, 0x13, 8, test_msg);
         }
 
         wdt_reset();
