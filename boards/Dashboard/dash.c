@@ -2,6 +2,7 @@
 #include <util/delay.h>
 #include <avr/interrupt.h>
 #include "can_api.h"
+#include "lcd.h"
 
 uint8_t RTDsound_msg[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 uint8_t RTDSound = 0; // whether or not the RTDSound is playing currently
@@ -15,7 +16,8 @@ ISR(CAN_INT_vect){
         PORTD |= _BV(PD6); //turn on the ready to drive sound
         RTDSound = 1;  // Indicates RTDSound is playing
     }
-
+    lcd_clrscr();
+    lcd_puts((char)RTDsound_msg[1]);
 
     // Set the chip to wait for another message.
     CAN_wait_on_receive(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, CAN_IDM_single);
@@ -29,7 +31,9 @@ int main (void) {
 
     uint16_t RTDSoundCounter = 0;
 
-    sei();
+    lcd_init(LCD_DISP_ON_CURSOR_BLINK);
+
+    sei(); // enables global interupts
 
     //Enable ADC, set prescalar to 128 (slow down ADC clock)
     //begin conversion
