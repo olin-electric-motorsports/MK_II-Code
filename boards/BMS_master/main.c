@@ -119,7 +119,8 @@ int main (void)
     init_fan_pwm(0x04);
 
     //Watchdog init
-    wdt_enable(WDTO_250MS);
+    //wdt_enable(WDTO_250MS);
+    wdt_disable();
 
     // SPI init
     init_spi_master();
@@ -132,14 +133,18 @@ int main (void)
     // Read LTC 6804 Config
     // uint8_t rx_cfg[total_ic][8];
 
+    EXT_LED_PORT |= _BV(LED_ORANGE);
+
     //Initialize temp and voltage values
-    uint8_t tmp = read_all_voltages();
+    //uint8_t tmp = read_all_voltages();
     //tmp += read_all_temperatures();
 
-  
+    uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
+    CAN_transmit(0, 0x13, 8, test_msg);
+
+    EXT_LED_PORT |= _BV(LED_GREEN);
 
     while(1) {
-
 
         PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
         PORTC &= ~_BV(PROG_LED_3);
@@ -163,17 +168,16 @@ int main (void)
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
-            error += read_all_voltages();
+            //error += read_all_voltages();
             //error += read_all_temperatures();
             //Probably want to do something with error in the future
-            transmit_voltages();
+            //transmit_voltages();
             //transmit_temperatures();
             FLAGS &= ~READ_VALS;
-            uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
-            CAN_transmit(1, 0x13, 8, test_msg);
+            
         }
 
-        wdt_reset();
+        //wdt_reset();
     }
 
 }
@@ -201,7 +205,6 @@ ISR(PCINT0_vect)
 ISR(TIMER1_OVF_vect)
 {
     FLAGS |= READ_VALS;
-    //PORTC ^= _BV(PC5);
 }
 
 
@@ -267,7 +270,6 @@ void transmit_temperatures(void)
 //READ VALUES TIMER/////////////////////////////////////////////////////////////
 
 void init_read_timer(void) {
-    PORTC |= _BV(PC5);
     TCCR1B |= _BV(CS11) | _BV(CS10); //Set prescaler to 1/64 (approximately 2 seconds)
     TIMSK1 |= 1; // Enable overflow interrupts (set TOIE)
 }
