@@ -27,7 +27,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x49
 
 //LTC68xx defs
-#define TOTAL_IC 12
+#define TOTAL_IC 1
 
 #define ENABLED 1
 #define DISABLED 0
@@ -117,11 +117,11 @@ int main (void)
     init_read_timer();
 
     //PWM init
-    init_fan_pwm(0x04);
+    init_fan_pwm(0x10);
 
     //Watchdog init
-    //wdt_enable(WDTO_250MS);
-    wdt_disable();
+    wdt_enable(WDTO_250MS);
+    //wdt_disable();
 
     // SPI init
     init_spi_master();
@@ -134,13 +134,13 @@ int main (void)
     // Read LTC 6804 Config
     // uint8_t rx_cfg[total_ic][8];
 
-    //PORTB |= _BV(PROG_LED_1);
+    PORTB |= _BV(PROG_LED_1);
 
     //Initialize temp and voltage values
     //uint8_t tmp = read_all_voltages();
     //tmp += read_all_temperatures();
 
-    uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
+    uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
     //PORTB |= _BV(PROG_LED_2);
@@ -158,29 +158,33 @@ int main (void)
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1);
+            //PORTB |= _BV(PROG_LED_1);
         }
         if (FLAGS & OVER_VOLTAGE) { //Set LED D8, PB6
-            PORTB |= _BV(PROG_LED_2);
+            //PORTB |= _BV(PROG_LED_2);
         }
         if (FLAGS & OVER_TEMP) { //Set LED D9, PC0
-            PORTC |= _BV(PROG_LED_3);
+            //PORTC |= _BV(PROG_LED_3);
         }
 
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
             PORTC ^= _BV(PROG_LED_3);
             uint8_t error = 0;
-            //error += read_all_voltages();
-            //error += read_all_temperatures();
+            error += read_all_voltages();
+            error += read_all_temperatures();
             //Probably want to do something with error in the future
-            //transmit_voltages();
-            //transmit_temperatures();
+            transmit_voltages();
+            transmit_temperatures();
+
+            //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
+            //CAN_transmit(0, 0x13, 8, test_msg);
+
             FLAGS &= ~READ_VALS;
             
         }
 
-        //wdt_reset();
+        wdt_reset();
     }
 
 }
@@ -205,15 +209,14 @@ ISR(PCINT0_vect)
 
 }
 
-ISR(TIMER1_OVF_vect)
-{
-    FLAGS |= READ_VALS;
-}
+// ISR(TIMER1_OVF_vect)
+// {
+//     FLAGS |= READ_VALS;
+// }
 
 ISR(TIMER1_COMPA_vect) 
 {
   FLAGS |= READ_VALS;
-  PORTC ^= _BV(PROG_LED_3);
 }
 
 
@@ -241,7 +244,7 @@ void transmit_voltages(void)
             }
 
             CAN_transmit(1, 0x13, 8, msg);
-            _delay_us(200);
+            _delay_us(10);
         }
     }
     EXT_LED_PORT ^= _BV(LED_ORANGE);
@@ -282,7 +285,7 @@ void init_read_timer(void) {
     TCCR1A &= ~(_BV(WGM11) | _BV(WGM10)); //set timer in CTC mode with reset on match with OCR1A
     TCCR1B |= _BV(CS11) | _BV(CS10) | _BV(WGM12); //Set prescaler to 1/64
     TIMSK1 |= _BV(OCIE1A); // Enable overflow interrupts (set TOIE)
-    OCR1A |= 0xFA;
+    OCR1A |= 50000; //timer compare value
 }
 
 
@@ -337,7 +340,6 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
 {
     uint8_t error = 0;
-
     wakeup_sleep(TOTAL_IC);
 
     //Iterate through first mux
@@ -383,8 +385,8 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         //upon successful execution clear flags
         FLAGS &= ~OVER_TEMP;
     }
+    
     return error;
-
 }
 
 //SPI functions ////////////////////////////////////////////////////////////////
