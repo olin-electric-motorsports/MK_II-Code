@@ -101,7 +101,8 @@ int main (void)
     DDRB |= _BV(PB5) | _BV(PB6) | _BV(PB7) | _BV(PB4) | _BV(PB2);
     DDRB &= ~_BV(PB3); //BSPD Current Sense
     DDRC |= _BV(PC0) | _BV(PC4) | _BV(PC5); //program LED
-    PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN));
+    PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
+    PORTC |= _BV(PROG_LED_3);
 
     PORTB |= _BV(PB2); //close relay
 
@@ -133,21 +134,22 @@ int main (void)
     // Read LTC 6804 Config
     // uint8_t rx_cfg[total_ic][8];
 
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //PORTB |= _BV(PROG_LED_1);
 
     //Initialize temp and voltage values
     //uint8_t tmp = read_all_voltages();
     //tmp += read_all_temperatures();
 
-    uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
+    uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
     CAN_transmit(0, 0x13, 8, test_msg);
 
-    EXT_LED_PORT |= _BV(LED_GREEN);
+    //PORTB |= _BV(PROG_LED_2);
+    EXT_LED_PORT |= _BV(LED_ORANGE);
 
     while(1) {
 
-        PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
-        PORTC &= ~_BV(PROG_LED_3);
+        //PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
+        //PORTC &= ~_BV(PROG_LED_3);
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
@@ -167,6 +169,7 @@ int main (void)
 
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
+            PORTC ^= _BV(PROG_LED_3);
             uint8_t error = 0;
             //error += read_all_voltages();
             //error += read_all_temperatures();
@@ -205,6 +208,12 @@ ISR(PCINT0_vect)
 ISR(TIMER1_OVF_vect)
 {
     FLAGS |= READ_VALS;
+}
+
+ISR(TIMER1_COMPA_vect) 
+{
+  FLAGS |= READ_VALS;
+  PORTC ^= _BV(PROG_LED_3);
 }
 
 
@@ -270,8 +279,10 @@ void transmit_temperatures(void)
 //READ VALUES TIMER/////////////////////////////////////////////////////////////
 
 void init_read_timer(void) {
-    TCCR1B |= _BV(CS11) | _BV(CS10); //Set prescaler to 1/64 (approximately 2 seconds)
-    TIMSK1 |= 1; // Enable overflow interrupts (set TOIE)
+    TCCR1A &= ~(_BV(WGM11) | _BV(WGM10)); //set timer in CTC mode with reset on match with OCR1A
+    TCCR1B |= _BV(CS11) | _BV(CS10) | _BV(WGM12); //Set prescaler to 1/64
+    TIMSK1 |= _BV(OCIE1A); // Enable overflow interrupts (set TOIE)
+    OCR1A |= 0xFA;
 }
 
 
