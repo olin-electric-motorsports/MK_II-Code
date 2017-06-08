@@ -27,7 +27,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x49
 
 //LTC68xx defs
-#define TOTAL_IC 1
+#define TOTAL_IC 6
 
 #define ENABLED 1
 #define DISABLED 0
@@ -102,7 +102,6 @@ int main (void)
     DDRB &= ~_BV(PB3); //BSPD Current Sense
     DDRC |= _BV(PC0) | _BV(PC4) | _BV(PC5); //program LED
     PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
-    PORTC |= _BV(PROG_LED_3);
 
     PORTB |= _BV(PB2); //close relay
 
@@ -143,13 +142,12 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
-    //PORTB |= _BV(PROG_LED_2);
     EXT_LED_PORT |= _BV(LED_ORANGE);
 
     while(1) {
 
-        //PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
-        //PORTC &= ~_BV(PROG_LED_3);
+        PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
+        PORTC &= ~_BV(PROG_LED_3);
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
@@ -158,18 +156,17 @@ int main (void)
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            //PORTB |= _BV(PROG_LED_1);
+            PORTB |= _BV(PROG_LED_1);
         }
         if (FLAGS & OVER_VOLTAGE) { //Set LED D8, PB6
-            //PORTB |= _BV(PROG_LED_2);
+            PORTB |= _BV(PROG_LED_2);
         }
         if (FLAGS & OVER_TEMP) { //Set LED D9, PC0
-            //PORTC |= _BV(PROG_LED_3);
+            PORTC |= _BV(PROG_LED_3);
         }
 
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
-            PORTC ^= _BV(PROG_LED_3);
             uint8_t error = 0;
             error += read_all_voltages();
             error += read_all_temperatures();
@@ -244,7 +241,7 @@ void transmit_voltages(void)
             }
 
             CAN_transmit(1, 0x13, 8, msg);
-            _delay_us(10);
+            _delay_ms(5);
         }
     }
     EXT_LED_PORT ^= _BV(LED_ORANGE);
@@ -269,12 +266,13 @@ void transmit_temperatures(void)
             uint8_t idx = j * 3;
             msg[1] = idx;
             for (uint8_t k = 0; k < 3; k++) { //3 cells per message
-                uint16_t cell_voltage = cell_codes[i][idx + k];
-                msg[2+k*2] = (uint8_t)(cell_voltage >> 8); //High byte
-                msg[3+k*2] = (uint8_t)cell_voltage;  //Low byte
+                uint16_t cell_temp = cell_temperatures[i][idx + k];
+                msg[2+k*2] = (uint8_t)(cell_temp >> 8); //High byte
+                msg[3+k*2] = (uint8_t)cell_temp;  //Low byte
             }
 
             CAN_transmit(2, 0x14, 8, msg);
+            _delay_ms(5);
         }
     }
 }
