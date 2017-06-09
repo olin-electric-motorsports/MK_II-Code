@@ -40,11 +40,22 @@ class CAN(object):
 						self.battery[segment][cell_num].segment = segment
 						self.battery[segment][cell_num].voltage = volts/10000.0
 					cell_num += 1
+			if (can_id == '0x14'):
+				message = line.split("MSG:", 1)[1]
+				bytes = message.split(",")[:8]
+				segment = int(bytes[0],0)
+				cell_num = int(bytes[1],0)
+				for i in range(3):
+					temp = (int(bytes[(i+1)*2],0)<<8)|int(bytes[(i+1)*2+1],0)
+					if not self.battery[segment][cell_num].cell is None:
+						self.battery[segment][cell_num].temp = temp
+					cell_num += 1
+
 
 	def display(self):
 		for segment in self.battery:
 			#bar = [SOME EXPRESSION for item in some_iterable]
-			v_list =  [str(cell.voltage)+"V" for cell in segment]
+			v_list =  [str(cell.voltage)+"V "+str(cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
 			print str(segment[0].segment) + ": " + string 
 		print "-----------------------------"

@@ -119,8 +119,8 @@ int main (void)
     init_fan_pwm(0x10);
 
     //Watchdog init
-    wdt_enable(WDTO_250MS);
-    //wdt_disable();
+    //wdt_enable(WDTO_250MS);
+    wdt_disable();
 
     // SPI init
     init_spi_master();
@@ -169,7 +169,7 @@ int main (void)
             EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
             error += read_all_voltages();
-            error += read_all_temperatures();
+            //error += read_all_temperatures();
             //Probably want to do something with error in the future
             transmit_voltages();
             transmit_temperatures();
@@ -181,7 +181,7 @@ int main (void)
             
         }
 
-        wdt_reset();
+        //wdt_reset();
     }
 
 }
