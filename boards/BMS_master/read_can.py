@@ -1,5 +1,6 @@
 import serial
 import time
+import math
 
 class Cell(object):
 	def __init__(self, segment, cell, voltage):
@@ -10,6 +11,17 @@ class Cell(object):
 
 	def display(self):
 		print "Seg: " + str(self.segment) + " Cell: " + str(self.cell) + " V: " + str(self.voltage) + " T: " + str(self.temp)
+
+	#Reference: https://en.wikipedia.org/wiki/Thermistor#B_or_.CE.B2_parameter_equation
+	def voltage_to_temp(voltage):
+		beta = 3950000.0
+		R_0 = 100000.0
+		R_top = 100000.0
+		R = (5000.0 * R_top / voltage) - R_top
+		r_inf = R_0 * math.exp((-1*beta)/298.0)
+		temp = beta/(math.log(R/r_inf))
+		return temp
+
 
 class CAN(object):
 
@@ -57,7 +69,7 @@ class CAN(object):
 			#bar = [SOME EXPRESSION for item in some_iterable]
 			v_list =  [str(cell.voltage)+"V "+str(cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
-			print str(segment[0].segment) + ": " + string 
+			print str(segment[0].segment) + ": " + string
 		print "-----------------------------"
 
 
