@@ -23,8 +23,8 @@ volatile uint8_t FLAGS = 0x00;
 
 // MUX defs
 #define MUX_CHANNELS 6
-#define MUX1_ADDRESS 0x48
-#define MUX2_ADDRESS 0x49
+#define MUX1_ADDRESS 0x49
+#define MUX2_ADDRESS 0x48
 
 //LTC68xx defs
 #define TOTAL_IC 6
@@ -52,13 +52,13 @@ const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL; // See ltc6811_daisy.h for Optio
 const uint8_t AUX_CH_TO_CONVERT = AUX_CH_GPIO1; // See ltc6811_daisy.h for Options
 const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL; // See ltc6811_daisy.h for Options
 
-const uint8_t total_ic = 6; //number of BMS slaves on the daisy chain
+const uint8_t total_ic = TOTAL_IC; //number of BMS slaves on the daisy chain
 
 
 //Under Voltage and Over Voltage Thresholds
 const uint16_t OV_THRESHOLD = 35900; // Over voltage threshold ADC Code. LSB = 0.0001
 const uint16_t SOFT_OV_THRESHOLD = 35500; //Soft over-voltage for discharge
-const uint16_t UV_THRESHOLD = 20100; // Under voltage threshold ADC Code. LSB = 0.0001
+const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 0.0001
 
 //Thermistor Under Voltage Threshold (26kOhm minimum resistance at 58 deg C)
 const uint16_t THERM_UV_THRESHOLD = 11349; //Vreg max is 5.5, 5.5*26/126
@@ -119,8 +119,8 @@ int main (void)
     init_fan_pwm(0x10);
 
     //Watchdog init
-    //wdt_enable(WDTO_250MS);
-    wdt_disable();
+    wdt_enable(WDTO_2S);
+    //wdt_disable();
 
     // SPI init
     init_spi_master();
@@ -142,11 +142,11 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //EXT_LED_PORT &= ~_BV(LED_ORANGE);
 
     while(1) {
 
-        PORTB &= ~(_BV(PROG_LED_1)|_BV(PROG_LED_2)); //Turn off status LEDs
+        PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
         PORTC &= ~_BV(PROG_LED_3);
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
@@ -169,7 +169,7 @@ int main (void)
             EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
             error += read_all_voltages();
-            //error += read_all_temperatures();
+            error += read_all_temperatures();
             //Probably want to do something with error in the future
             transmit_voltages();
             transmit_temperatures();
@@ -181,7 +181,7 @@ int main (void)
             
         }
 
-        //wdt_reset();
+        wdt_reset();
     }
 
 }
@@ -244,7 +244,6 @@ void transmit_voltages(void)
             _delay_ms(5);
         }
     }
-    EXT_LED_PORT ^= _BV(LED_ORANGE);
     
 }
 
@@ -281,9 +280,10 @@ void transmit_temperatures(void)
 
 void init_read_timer(void) {
     TCCR1A &= ~(_BV(WGM11) | _BV(WGM10)); //set timer in CTC mode with reset on match with OCR1A
-    TCCR1B |= _BV(CS11) | _BV(CS10) | _BV(WGM12); //Set prescaler to 1/64
+    TCCR1B &= ~(_BV(CS10) | _BV(CS11));
+    TCCR1B |= _BV(CS12)  | _BV(WGM12); //Set prescaler to 1/256
     TIMSK1 |= _BV(OCIE1A); // Enable overflow interrupts (set TOIE)
-    OCR1A |= 50000; //timer compare value
+    OCR1A |= 30000; //timer compare value
 }
 
 
@@ -338,15 +338,14 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
 {
     uint8_t error = 0;
-    wakeup_sleep(TOTAL_IC);
-
+    //wakeup_sleep(TOTAL_IC); //only needed if not called directly after reading voltages
     //Iterate through first mux
     mux_disable(TOTAL_IC, MUX2_ADDRESS);
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
         //Changing channel over I2C is going to be tricky
         set_mux_channel(TOTAL_IC, MUX1_ADDRESS, i);
-        _delay_us(50); //TODO: This is a blatant guess
+        //_delay_us(50); //TODO: This is a blatant guess
 
         o_ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
@@ -356,7 +355,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
                 FLAGS |= OVER_TEMP;
                 error += 1;
             }
-            cell_temperatures[j][i*2 +1] = aux_codes[j][0]; //Store temperatures
+            cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
         }
     }
     mux_disable(TOTAL_IC, MUX1_ADDRESS);
@@ -365,7 +364,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
 
         //Changing channel over I2C is going to be tricky
         set_mux_channel(TOTAL_IC, MUX2_ADDRESS, i);
-        _delay_us(50); //TODO: This is a blatant guess
+        //_delay_us(50); //TODO: This is a blatant guess
 
         o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_GPIO1); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
@@ -1080,7 +1079,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
     uint8_t remainder = 0;
     uint8_t transmitted_bytes = 0;
     uint8_t data_counter = 0;
-    uint8_t comm[1][6];
+    uint8_t comm[total_ic][6];
     uint8_t rx_comm[1][8];
     if (((data_len)%3) == 0)
     {
@@ -1095,15 +1094,19 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
 
     address = address << 1; // convert 7 bit address to 8 bits
 
-    comm[0][0] = START;//NO_TRANSMIT; //
-    comm[0][1] = NACK_STOP;//BLANK ; //
-    comm[0][2] = START | (address >> 4); //
-    comm[0][3] = (address<<4) | NACK ; //
-    comm[0][4] = BLANK | (command >>4);
-    comm[0][5] = (command<<4) | NACK;
+    for(uint8_t i=0; i<total_ic; i++){
+      comm[i][0] = START;//NO_TRANSMIT; //
+      comm[i][1] = NACK_STOP;//BLANK ; //
+      comm[i][2] = START | (address >> 4); //
+      comm[i][3] = (address<<4) | NACK ; //
+      comm[i][4] = BLANK | (command >>4);
+      comm[i][5] = (command<<4) | NACK;
+    }
 
     if (loop_count == 0) { // if there is no data, free up the bus
-        comm[0][5] = (command<<4) | NACK_STOP;
+      for(uint8_t i=0; i<total_ic; i++){
+        comm[i][5] = (command<<4) | NACK_STOP;
+      }
         //Serial.println("Adding NACK_STOP since there is no data");
     }
 
@@ -1115,9 +1118,11 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
     //  Serial.println();
 
 
+
     wrcomm(total_ic,comm);
     stcomm();
-    rdcomm(total_ic,rx_comm);
+    //rdcomm(total_ic,rx_comm);
+    EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //  Serial.print("rx_comm: ");
     //  for(uint8_t i=0; i < 6; i++){
@@ -1147,6 +1152,11 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
                 comm[0][transmitted_bytes+1] =  BLANK ; //
                 transmitted_bytes = transmitted_bytes + 2;
             }
+            for(uint8_t i=1; i<total_ic; i++){
+              for(uint8_t j=0; j<6; j++){
+                comm[i][j] = comm[0][j];
+              }
+            } 
             wrcomm(1,comm);
             stcomm();
         }
@@ -1160,6 +1170,11 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
                 else { comm[0][(k*2)+1] = (data[data_counter]<<4) | NACK_STOP ;}
                 data_counter++;
             }
+            for(uint8_t i=1; i<total_ic; i++){
+              for(uint8_t j=0; j<6; j++){
+                comm[i][j] = comm[0][j];
+              }
+            } 
             wrcomm(1,comm);
             stcomm();
         }
@@ -1204,6 +1219,11 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
     comm[0][4] = START + (address >> 4); //
     comm[0][5] = (address<<4) + 0x10 + ACK ; //
 
+    for(uint8_t i=1; i<total_ic; i++){
+      for(uint8_t j=0; j<6; j++){
+        comm[i][j] = comm[0][j];
+      }
+    } 
     wrcomm(total_ic,comm);
     rdcomm(total_ic,rx_comm);
     stcomm();
@@ -1227,6 +1247,11 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
                 transmitted_bytes = transmitted_bytes + 2;
             }
 
+            for(uint8_t i=1; i<total_ic; i++){
+              for(uint8_t j=0; j<6; j++){
+                comm[i][j] = comm[0][j];
+              }
+            } 
             wrcomm(1,comm);
             stcomm();
             rdcomm(1,rx_comm);
@@ -1249,6 +1274,11 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
                 else { comm[0][(k*2)+1] = 0xF0 | NACK_STOP ;}
                 data_counter++;
             }
+            for(uint8_t i=1; i<total_ic; i++){
+              for(uint8_t j=0; j<6; j++){
+                comm[i][j] = comm[0][j];
+              }
+            } 
             wrcomm(1,comm);
             stcomm();
             rdcomm(1,rx_comm);
