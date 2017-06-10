@@ -13,19 +13,14 @@ class Cell(object):
 	def display(self):
 		print "Seg: " + str(self.segment) + " Cell: " + str(self.cell) + " V: " + str(self.voltage) + " T: " + str(self.temp)
 
-	#Reference: https://en.wikipedia.org/wiki/Thermistor#B_or_.CE.B2_parameter_equation
-	def voltage_to_temp(self, voltage):
-		if voltage == 0:
-			return 999
-		voltage = voltage / 10000.0
-		beta = 3950000.0
-		R_0 = 100000.0
-		R_top = 100000.0
-		R = (5000.0 * R_top / voltage) - R_top
-		r_inf = R_0 * math.exp((-1*beta)/298.0)
-		print "R: "+str(R)+" r_inf: "+str(r_inf)+ " exp: "+str((-1*beta)/298.0)
-		temp = beta/(math.log(R/r_inf))
-		return temp
+def voltage_to_temp(voltage):
+    beta = 3950000.0
+    R_0 = 100000.0
+    R_top = 100000.0
+    T_0 = 298 + 25
+    R = (5.0 * R_top / voltage) - R_top
+    temp = beta / (math.log(R) - math.log(R_0) + (beta / T_0)) - 298
+    return temp
 
 
 class CAN(object):
@@ -91,5 +86,9 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-    can = CAN('/dev/cu.usbmodem14111')
-    can.run()
+    # can = CAN('/dev/cu.usbmodem14111')
+    # can.run()
+
+	voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]
+
+	temps = [voltage_to_temp(voltage) for voltage in voltages]
