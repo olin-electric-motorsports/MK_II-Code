@@ -16,6 +16,7 @@ volatile uint8_t FLAGS = 0x00;
 #define SOFT_OVER_VOLTAGE   0b00010000
 #define OVER_TEMP           0b00100000
 #define OPEN_SHDN           0b00101100
+#define AIRS_CLOSED         0b01000000
 
 #define PROG_LED_1 PB5
 #define PROG_LED_2 PB6
@@ -60,8 +61,8 @@ const uint16_t OV_THRESHOLD = 35900; // Over voltage threshold ADC Code. LSB = 0
 const uint16_t SOFT_OV_THRESHOLD = 35500; //Soft over-voltage for discharge
 const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 0.0001
 
-//Thermistor Under Voltage Threshold (26kOhm minimum resistance at 58 deg C)
-const uint16_t THERM_UV_THRESHOLD = 11349; //Vreg max is 5.5, 5.5*26/126
+//Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
+const uint16_t THERM_V_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
 
 
 /******************************************************
@@ -100,6 +101,14 @@ uint16_t cell_vref2[TOTAL_IC][CELL_CHANNELS];
   |cell_vref2[0][0]  |cell_vref2[0][1]  |cell_vref2[0][2]  |    .....     | cell_vref2[0][11]  |  cell_vref2[1][0]  | cell_vref2[1][1]|  .....   |
   |----------------- |------------------|------------------|--------------|--------------------|--------------------|-----------------|----------|
   |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     | IC1 Cell 12        | IC2 Cell 1         |IC2 Cell 2       |  .....   |
+****/
+
+uint16_t discharge_status[TOTAL_IC]
+/*!<
+  Whether each cell is discharging will be stored in the discharge_status[12] array in the following format:
+  |discharge_status[0]  |discharge_status[1]  |discharge_status[2]  |    .....     | discharge_status[TOTAL_IC]  |
+  |---------------------|---------------------|---------------------|--------------|-----------------------------|
+  |IC1 Discharge[11:0]  |IC2 Discharge[11:0]  |IC3 Discharge[11:0]  |    .....     | IC_TOTAL_IC Discharge[11:0] |
 ****/
 
 int main (void)
@@ -186,7 +195,7 @@ int main (void)
             //CAN_transmit(0, 0x13, 8, test_msg);
 
             FLAGS &= ~READ_VALS;
-            
+
         }
 
         wdt_reset();
@@ -196,12 +205,18 @@ int main (void)
 
 //ISRs//////////////////////////////////////////////////////////////////////////
 
-// ISR(CAN_INT_vect){
-//     CANPAGE = 0x00; //reset the CAN page
-//     uint8_t msg = CANMSG; //grab the first byte of the CAN message
-//     PORTB ^= _BV(PB6);
-//     CAN_Rx(0, IDT_GLOBAL, IDT_GLOBAL_L, IDM_single); //setup to receive again
-// }
+ISR(CAN_INT_vect){
+    CANPAGE = 0x00; //reset the CAN page
+    uint8_t msg = CANMSG; //grab the first byte of the CAN message
+    if (msg[1]) {
+      FLAGS |= AIRS_CLOSED;
+    }
+    if (msg[1] == 0) {
+      FLAGS &= ~(AIRS_CLOSED);
+    }
+    PORTB ^= _BV(PB6);
+    CAN_Rx(0, IDT_AIR_CONTROL, IDT_AIR_CONTROL_L, IDM_single); //setup to receive again
+}
 
 ISR(PCINT0_vect)
 {
@@ -219,7 +234,7 @@ ISR(PCINT0_vect)
 //     FLAGS |= READ_VALS;
 // }
 
-ISR(TIMER1_COMPA_vect) 
+ISR(TIMER1_COMPA_vect)
 {
   FLAGS |= READ_VALS;
 }
@@ -252,7 +267,7 @@ void transmit_voltages(void)
             _delay_ms(5);
         }
     }
-    
+
 }
 
 
@@ -362,11 +377,17 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
-            if (aux_codes[j][0] < THERM_UV_THRESHOLD) {
+            // if (aux_codes[j][0] < THERM_V_FRACTION) {
+            //     FLAGS |= OVER_TEMP;
+            //     error += 1;
+            // }
+            cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
+            uint32_t _cell_temp_mult = cell_temperatures[j][i*2] * THERM_V_FRACTION;
+            uint32_t _cell_ref_mult = cell_vref2[j][i*2] * 1000;
+            if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
                 error += 1;
             }
-            cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
         }
     }
     mux_disable(TOTAL_IC, MUX1_ADDRESS);
@@ -393,7 +414,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         //upon successful execution clear flags
         FLAGS &= ~OVER_TEMP;
     }
-    
+
     return error;
 }
 
@@ -547,6 +568,71 @@ void o_ltc6811_rdcfg(uint8_t total_ic, //Number of ICs in the system
   // return(pec_error);
 }
 
+/*
+ This command will write the configuration registers of the ltc6811-1s
+ connected in a daisy chain stack. The configuration is written in descending
+ order so the last device's configuration is written first.
+*/
+void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
+                   uint8_t config[][6] //A two dimensional array of the configuration data that will be written
+                  )
+{
+  const uint8_t BYTES_IN_REG = 6;
+  const uint8_t CMD_LEN = 4+(8*total_ic);
+  uint8_t *cmd;
+  uint16_t cfg_pec;
+  uint8_t cmd_index; //command counter
+
+  cmd = (uint8_t *)malloc(CMD_LEN*sizeof(uint8_t));
+
+
+  cmd[0] = 0x00;
+  cmd[1] = 0x01;
+  cmd[2] = 0x3d;
+  cmd[3] = 0x6e;
+
+
+  cmd_index = 4;
+  for (uint8_t current_ic = total_ic; current_ic > 0; current_ic--)       // executes for each ltc6811 in daisy chain, this loops starts with
+  {
+    // the last IC on the stack. The first configuration written is
+    // received by the last IC in the daisy chain
+
+    for (uint8_t current_byte = 0; current_byte < BYTES_IN_REG; current_byte++) // executes for each of the 6 bytes in the CFGR register
+    {
+      // current_byte is the byte counter
+
+      cmd[cmd_index] = config[current_ic-1][current_byte];            //adding the config data to the array to be sent
+      cmd_index = cmd_index + 1;
+    }
+
+    cfg_pec = (uint16_t)pec15_calc(BYTES_IN_REG, &config[current_ic-1][0]);   // calculating the PEC for each ICs configuration register data
+    cmd[cmd_index] = (uint8_t)(cfg_pec >> 8);
+    cmd[cmd_index + 1] = (uint8_t)cfg_pec;
+    cmd_index = cmd_index + 2;
+  }
+
+
+  //wakeup_idle ();                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
+
+  PORTB &= ~_BV(PB4); //set CS low
+  spi_write_array(CMD_LEN, cmd);
+  PORTB |= _BV(PB4); //set CS high
+  free(cmd);
+}
+
+//This sets a discharge bit in the configuration register
+void set_discharge(uint8_t ic, uint8_t cell)
+{
+  if (Cell<9)
+  {
+    tx_cfg[ic][4] = tx_cfg[i][4] + (1<<(cell-1));
+  }
+  else if (Cell < 13)
+  {
+    tx_cfg[ic][5] = tx_cfg[i][5] + (1<<(cell-9));
+  }
+}
 
 //This function will block operation until the ADC has finished it's conversion
 uint32_t o_ltc6811_pollAdc(void)
@@ -1167,7 +1253,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
               for(uint8_t j=0; j<6; j++){
                 comm[i][j] = comm[0][j];
               }
-            } 
+            }
             wrcomm(1,comm);
             stcomm();
         }
@@ -1185,7 +1271,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
               for(uint8_t j=0; j<6; j++){
                 comm[i][j] = comm[0][j];
               }
-            } 
+            }
             wrcomm(1,comm);
             stcomm();
         }
@@ -1234,7 +1320,7 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
       for(uint8_t j=0; j<6; j++){
         comm[i][j] = comm[0][j];
       }
-    } 
+    }
     wrcomm(total_ic,comm);
     rdcomm(total_ic,rx_comm);
     stcomm();
@@ -1262,7 +1348,7 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
               for(uint8_t j=0; j<6; j++){
                 comm[i][j] = comm[0][j];
               }
-            } 
+            }
             wrcomm(1,comm);
             stcomm();
             rdcomm(1,rx_comm);
@@ -1289,7 +1375,7 @@ void read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *dat
               for(uint8_t j=0; j<6; j++){
                 comm[i][j] = comm[0][j];
               }
-            } 
+            }
             wrcomm(1,comm);
             stcomm();
             rdcomm(1,rx_comm);
@@ -1322,4 +1408,20 @@ uint16_t pec15_calc(uint8_t len, //Number of bytes that will be used to calculat
     remainder = (remainder<<8)^pgm_read_word_near(crc15Table+addr);
   }
   return(remainder*2);//The CRC15 has a 0 in the LSB so the remainder must be multiplied by 2
+}
+
+//This sets a discharge bit in the configuration register
+void set_discharge(int Cell)
+{
+  for (int i=0; i<TOTAL_IC; i++)
+  {
+    if (Cell<9)
+    {
+      tx_cfg[i][4] = tx_cfg[i][4] + (1<<(Cell-1));
+    }
+    else if (Cell < 13)
+    {
+      tx_cfg[i][5] = tx_cfg[i][5] + (1<<(Cell-9));
+    }
+  }
 }
