@@ -20,31 +20,38 @@ uint8_t legalDeviation;  // 10% of the throttle range
 
 ISR(PCINT2_vect){
 
-  /**** Checks If Button Is Pressed ****/
-  /*
-  uint8_t dashboardMSG[8];
-  CAN_read_received(0, CAN_IDT_DASHBOARD, CAN_IDT_DASHBOARD_L, dashboardMSG);
-  if(dashboardMSG[0]==0b00000001)
+
+
+  uint8_t recievedMSG[8];
+  CAN_read_received(0, 8, recievedMSG);
+
+  /*** If the message is from Dashboard ***/
+  if((CANIDT1 == (uint8_t)CAN_IDT_DASHBOARD>>3) && (CANIDT2 == (uint8_t)CAN_IDT_DASHBOARD<<5)){
+    /**** Checks If Button Is Pressed ****/
+    if(recievedMSG[0]==0b00000001)
+    {
+      startUpConditions |= 0b00000010;  // changes bit 1 to 1
+    }
+    else if(recievedMSG[0]=0b00000000)
+    {
+      startUpConditions &= 0b11111101;  // changes bit 1 to 0
+    }
+  }//end Dashboard if
+
+  /*** If the message is from AIRControl ***/
+  if((CANIDT1 == (uint8_t)CAN_IDT_AIR_CONTROL>>3) && (CANIDT2 == (uint8_t)CAN_IDT_AIR_CONTROL<<5))
   {
-    startUpConditions |= 0b00000010;  // changes bit 1 to 1
-  }
-  else if(dashboardMSG[0]=0b00000000)
-  {
-    startUpConditions &= 0b11111101;  // changes bit 1 to 0
-  }
-*/
-  /**** Checks if Shutdown Circuit is Closed ****/
-  /*
-  uint8_t airMSG[8];
-  CAN_read_received(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, airMSG);
-  if(airMSG[1]==0b00000001)
-  {
-    startUpConditions |= 0b00000001;  // changes bit 0 to 1
-  }
-  else if(airMSG[1]==0b00000000)
-  {
-    startUpConditions &= 0b11111110;  // changes bit 0 to 0
-  }*/
+    /**** Checks if Shutdown Circuit is Closed ****/
+    if(recievedMSG[1]==0b00000001)
+    {
+      startUpConditions |= 0b00000001;  // changes bit 0 to 1
+    }
+    else if(recievedMSG[1]==0b00000000)
+    {
+      startUpConditions &= 0b11111110;  // changes bit 0 to 0
+    }
+  }//end AIRControl if
+
 }
 
 uint8_t brakePlausibility(uint16_t rThrottle[], uint16_t rBrake)

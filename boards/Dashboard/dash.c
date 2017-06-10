@@ -89,7 +89,7 @@ int main (void) {
       }
 
       /**** Sends CAN Message ****/
-      CAN_transmit(0, CAN_IDT_DASHBOARD, CAN_IDT_DASHBOARD_L, msg);
+      //CAN_transmit(0, CAN_IDT_DASHBOARD, CAN_IDT_DASHBOARD_L, msg);
 
       _delay_ms(1);
       if( bit_is_clear(CANEN2, 0))

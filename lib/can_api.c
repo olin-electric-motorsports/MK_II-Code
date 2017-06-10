@@ -148,8 +148,8 @@ uint8_t CAN_wait_on_receive (uint8_t mob, uint8_t ident, uint8_t mask, uint8_t m
 
     // Set MOb ID
     //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
-    CANIDT1 = ident;
-    CANIDT2 = 0x00;
+    CANIDT1 = (uint8_t)(ident >> 3); // node ID
+    CANIDT2 = (uint8_t)(ident << 5);
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
 
