@@ -61,7 +61,7 @@ const uint16_t SOFT_OV_THRESHOLD = 35500; //Soft over-voltage for discharge
 const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 0.0001
 
 //Thermistor Under Voltage Threshold (26kOhm minimum resistance at 58 deg C)
-const uint16_t THERM_UV_THRESHOLD = 11349; //Vreg max is 5.5, 5.5*26/126
+const uint16_t THERM_UV_THRESHOLD = 7015; //Vreg max is 3.4, 3.4*26/126
 
 
 /******************************************************
@@ -150,27 +150,35 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
-    //EXT_LED_PORT &= ~_BV(LED_ORANGE);
 
     while(1) {
 
-        PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
-        PORTC &= ~_BV(PROG_LED_3);
+        //PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
+        //PORTC &= ~_BV(PROG_LED_3);
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
         if (FLAGS & OPEN_SHDN) {
             PORTB &= ~_BV(PB2); //open relay
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1);
+            PORTB |= _BV(PROG_LED_1); 
+        } else {
+          PORTB &= ~_BV(PROG_LED_1);
         }
+
         if (FLAGS & OVER_VOLTAGE) { //Set LED D8, PB6
             PORTB |= _BV(PROG_LED_2);
+        } else {
+          PORTB &= ~_BV(PROG_LED_2);
         }
+
         if (FLAGS & OVER_TEMP) { //Set LED D9, PC0
             PORTC |= _BV(PROG_LED_3);
+        } else {
+          PORTC &= ~_BV(PROG_LED_3);
         }
 
         if (FLAGS & READ_VALS) {
