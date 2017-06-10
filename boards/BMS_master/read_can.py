@@ -7,7 +7,8 @@ class Cell(object):
 		self.segment = segment
 		self.cell = cell
 		self.voltage = voltage
-		self.temp = 0
+		self.temp = None
+		self.vref2 = None
 
 	def display(self):
 		print "Seg: " + str(self.segment) + " Cell: " + str(self.cell) + " V: " + str(self.voltage) + " T: " + str(self.temp)
@@ -44,7 +45,7 @@ class CAN(object):
 				self.display()
 			line = self.ser.readline()
 			can_id = line[4:8]
-			if (can_id == '0x13'):
+			if (can_id == '0x13'): #voltage message
 				message = line.split("MSG:", 1)[1]
 				bytes = message.split(",")[:8]
 				segment = int(bytes[0],0)
@@ -60,18 +61,21 @@ class CAN(object):
 						self.battery[segment][cell_num].segment = segment
 						self.battery[segment][cell_num].voltage = volts/10000.0
 					cell_num += 1
-			if (can_id == '0x14'):
+			if (can_id == '0x14'): #temperature message
 				message = line.split("MSG:", 1)[1]
 				bytes = message.split(",")[:8]
 				segment = int(bytes[0],0)
 				cell_num = int(bytes[1],0)
-				for i in range(3):
+				vref2 = ((int(bytes[6],0)<<8)|int(bytes[7],0))/10000.0
+				for i in range(2):
 					temp_volt = (int(bytes[(i+1)*2],0)<<8)|int(bytes[(i+1)*2+1],0)
 					temp_volt = temp_volt/10000.0
 					#print "temp_volt: " + str(temp_volt)
 					if not self.battery[segment][cell_num].cell is None:
 						self.battery[segment][cell_num].temp = temp_volt
+						self.battery[segment][cell_num].vref2 = vref2
 					cell_num += 1
+
 
 
 	def display(self):
@@ -79,7 +83,7 @@ class CAN(object):
 			#bar = [SOME EXPRESSION for item in some_iterable]
 			v_list =  [str(cell.voltage)+"V "+str(cell.temp)+"CV |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
-			print str(segment[0].segment) + ": " + string
+			print str(segment[0].segment) + ": "+str(segment[0].vref2)+"Vref2 |" + string
 		print "-----------------------------"
 
 

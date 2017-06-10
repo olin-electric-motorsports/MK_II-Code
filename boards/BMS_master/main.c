@@ -49,7 +49,7 @@ const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
 const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ; // See ltc6811_daisy.h for Options
 const uint8_t ADC_DCP = DCP_ENABLED; // See ltc6811_daisy.h for Options
 const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL; // See ltc6811_daisy.h for Options
-const uint8_t AUX_CH_TO_CONVERT = AUX_CH_GPIO1; // See ltc6811_daisy.h for Options
+const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL; // See ltc6811_daisy.h for Options
 const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL; // See ltc6811_daisy.h for Options
 
 const uint8_t total_ic = TOTAL_IC; //number of BMS slaves on the daisy chain
@@ -94,6 +94,14 @@ uint16_t cell_temperatures[TOTAL_IC][CELL_CHANNELS];
   |IC1 Cell 1               |IC1 Cell 2               |IC1 Cell 3               |    .....     |  IC1 Cell 12             |IC2 Cell 1                |IC2 Cell 2              | .....    |
 ****/
 
+uint16_t cell_vref2[TOTAL_IC][CELL_CHANNELS];
+/*!<
+  The cell temperatures will be stored in the cell_temperatures[][12] array in the following format:
+  |cell_vref2[0][0]  |cell_vref2[0][1]  |cell_vref2[0][2]  |    .....     | cell_vref2[0][11]  |  cell_vref2[1][0]  | cell_vref2[1][1]|  .....   |
+  |----------------- |------------------|------------------|--------------|--------------------|--------------------|-----------------|----------|
+  |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     | IC1 Cell 12        | IC2 Cell 1         |IC2 Cell 2       |  .....   |
+****/
+
 int main (void)
 {
     sei(); //allow interrupts
@@ -119,7 +127,7 @@ int main (void)
     init_fan_pwm(0x10);
 
     //Watchdog init
-    wdt_enable(WDTO_2S);
+    wdt_enable(WDTO_4S);
     //wdt_disable();
 
     // SPI init
@@ -251,24 +259,27 @@ void transmit_voltages(void)
 
 /*!<
   Cell temperatures will be transmitted in this CAN message as 16 bit ints, LSB = 0.0001:
-  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[6] |            msg[7] |
-  |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
-  |IC/Segment number |first cell index  |msg Cell 1 High   |msg Cell 1 Low    |    .....     |msg Cell 3 High    |msg Cell 3 Low     |
+  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |           msg[4] |           msg[5] |           msg[6] |           msg[7] |
+  |------------------|------------------|------------------|------------------|------------------|------------------|------------------|------------------|
+  |IC/Segment number |first cell index  |msg Cell 1 High   |msg Cell 1 Low    |msg Cell 2 High   |msg Cell 2 low    |VREF2 High        | VREF2 Low        |
 ****/
 void transmit_temperatures(void)
 {
     //Declare message variable out here
     uint8_t msg[8];
     for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
-        msg[0] = i; //s
-        for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
-            uint8_t idx = j * 3;
+        msg[0] = i; //segment
+        uint16_t vref2 = aux_codes[i][5]; //vref2 for the segment
+        for (uint8_t j = 0; j < 6; j++) { //6 messages per IC
+            uint8_t idx = j * 2;
             msg[1] = idx;
-            for (uint8_t k = 0; k < 3; k++) { //3 cells per message
+            for (uint8_t k = 0; k < 2; k++) { //2 cells per message
                 uint16_t cell_temp = cell_temperatures[i][idx + k];
                 msg[2+k*2] = (uint8_t)(cell_temp >> 8); //High byte
                 msg[3+k*2] = (uint8_t)cell_temp;  //Low byte
             }
+            msg[6] = (uint8_t)(vref2 >> 8); //vref2 High byte
+            msg[7] = (uint8_t)(vref2); //vref2 Low byte
 
             CAN_transmit(2, 0x14, 8, msg);
             _delay_ms(5);
@@ -347,7 +358,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         set_mux_channel(TOTAL_IC, MUX1_ADDRESS, i);
         //_delay_us(50); //TODO: This is a blatant guess
 
-        o_ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_GPIO1); //start ADC measurement
+        o_ltc6811_adax(MD_7KHZ_3KHZ, AUX_CH_ALL); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
@@ -366,7 +377,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         set_mux_channel(TOTAL_IC, MUX2_ADDRESS, i);
         //_delay_us(50); //TODO: This is a blatant guess
 
-        o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_GPIO1); //start ADC measurement
+        o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
