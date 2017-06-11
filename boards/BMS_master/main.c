@@ -104,7 +104,7 @@ uint16_t cell_vref2[TOTAL_IC][CELL_CHANNELS];
   |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     | IC1 Cell 12        | IC2 Cell 1         |IC2 Cell 2       |  .....   |
 ****/
 
-uint16_t discharge_status[TOTAL_IC]
+uint16_t discharge_status[TOTAL_IC];
 /*!<
   Whether each cell is discharging will be stored in the discharge_status[12] array in the following format:
   |discharge_status[0]  |discharge_status[1]  |discharge_status[2]  |    .....     | discharge_status[TOTAL_IC]  |
@@ -113,8 +113,8 @@ uint16_t discharge_status[TOTAL_IC]
 ****/
 
 /* Config register for comms with LTC6804 */
-uint8_t tx_cfg[TOTAL_IC][8]
-uint8_t rx_cfg[TOTAL_IC][8]
+uint8_t tx_cfg[TOTAL_IC][8];
+uint8_t rx_cfg[TOTAL_IC][8];
 
 int main (void)
 {
@@ -723,7 +723,7 @@ void disable_discharge(uint8_t ic, uint8_t cell)
   {
     tx_cfg[ic-1][5] &= ~(1<<(cell-9));
   }
-  discharge_status[ic-1] &= ~(1 << (cell-1))
+  discharge_status[ic-1] &= ~(1 << (cell-1));
 }
 
 //This function will block operation until the ADC has finished it's conversion
