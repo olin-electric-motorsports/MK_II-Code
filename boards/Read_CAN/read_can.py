@@ -20,17 +20,21 @@ class CAN(object):
             self.display()
             line = self.ser.readline()
             can_id = line[4:8]
-            message = line.split("MSG:", 1)[1]
-            bytes = message.split(",")[:8]
-            #print line
-            if can_id in self.message_dict.keys():
-                #update message in dictionary
-                self.message_dict[can_id].time = time.gmtime()
-                self.message_dict[can_id].bytes = bytes
-                self.message_dict[can_id].line = line
-            else:
-                #add message to dictionary
-                self.message_dict[can_id] = Message(can_id,bytes,line)
+            try: 
+                message = line.split("MSG:", 1)[1]
+                bytes = message.split(",")[:8]
+                #if can_id == "0x16" or can_id == "0x17":
+                #    print line
+                if can_id in self.message_dict.keys():
+                    #update message in dictionary
+                    self.message_dict[can_id].time = time.gmtime()
+                    self.message_dict[can_id].bytes = bytes
+                    self.message_dict[can_id].line = line
+                else:
+                    #add message to dictionary
+                    self.message_dict[can_id] = Message(can_id,bytes,line)
+            except:
+                print "Received unexpected message"
 
     def display(self):
         for key in self.message_dict:
@@ -46,5 +50,6 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-    can = CAN('/dev/cu.usbmodem14121')
+
+    can = CAN('/dev/cu.usbmodem14111')
     can.run()
