@@ -706,7 +706,7 @@ void enable_discharge(uint8_t ic, uint8_t cell)
   {
     tx_cfg[ic-1][5] |= (1<<(cell-9));
   }
-  discharge_status[ic-1] |= (1 << (cell-1))
+  discharge_status[ic-1] |= (1 << (cell-1));
 }
 
 //This unsets a discharge bit in the configuration register

@@ -83,7 +83,7 @@ class CAN(object):
 	def display(self):
 		for segment in self.battery:
 			#bar = [SOME EXPRESSION for item in some_iterable]
-			v_list =  [("%0.3f" % cell.temp_voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
+			v_list =  [("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
 			print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
 		print "-----------------------------"
