@@ -425,8 +425,8 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
             cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
-            uint32_t _cell_temp_mult = cell_temperatures[j][i*2] * THERM_V_FRACTION;
-            uint32_t _cell_ref_mult = aux_codes[j][5] * 1000;
+            uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_V_FRACTION;
+            uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
             if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
                 error += 1;
@@ -449,8 +449,8 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         }
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
             cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; //Store temperatures
-            uint32_t _cell_temp_mult = cell_temperatures[j][i*2 + 1] * THERM_V_FRACTION;
-            uint32_t _cell_ref_mult = aux_codes[j][5] * 1000;
+            uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_V_FRACTION;
+            uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
             if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
                 error += 1;
