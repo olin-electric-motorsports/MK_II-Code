@@ -37,3 +37,6 @@ obj/
 
 # For the VIM Users
 *.swp
+
+# For Mac Users
+*.DS_Store
