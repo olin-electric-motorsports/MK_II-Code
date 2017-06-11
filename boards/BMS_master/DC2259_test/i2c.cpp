@@ -22,7 +22,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
   uint8_t remainder = 0;
   uint8_t transmitted_bytes = 0;
   uint8_t data_counter = 0;
-  uint8_t comm[1][6];
+  uint8_t comm[total_ic][6];
   uint8_t rx_comm[1][8];
   if (((data_len)%3) == 0)
   {
@@ -37,15 +37,20 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
 
   address = address << 1; // convert 7 bit address to 8 bits
 
-  comm[0][0] = START;//NO_TRANSMIT; //
-  comm[0][1] = NACK_STOP;//BLANK ; //
-  comm[0][2] = START | (address >> 4); //
-  comm[0][3] = (address<<4) | NACK ; //
-  comm[0][4] = BLANK | (command >>4);
-  comm[0][5] = (command<<4) | NACK;
+  for(uint8_t i=0; i<total_ic; i++){
+    comm[i][0] = START;//NO_TRANSMIT; //
+    comm[i][1] = NACK_STOP;//BLANK ; //
+    comm[i][2] = START | (address >> 4); //
+    comm[i][3] = (address<<4) | NACK ; //
+    comm[i][4] = BLANK | (command >>4);
+    comm[i][5] = (command<<4) | NACK;
+  }
+  
 
   if (loop_count == 0) { // if there is no data, free up the bus
-    comm[0][5] = (command<<4) | NACK_STOP;
+    for(uint8_t i=0; i<total_ic; i++){
+      comm[i][5] = (command<<4) | NACK_STOP;
+    }
     //Serial.println("Adding NACK_STOP since there is no data");
   }
 
@@ -59,7 +64,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
 
   ltc6811_wrcomm(total_ic,comm);
   ltc6811_stcomm();
-  ltc6811_rdcomm(total_ic,rx_comm);
+  //ltc6811_rdcomm(total_ic,rx_comm);
 
 //  Serial.print("rx_comm: ");
 //  for(uint8_t i=0; i < 6; i++){
@@ -124,7 +129,7 @@ uint8_t read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *
   uint8_t data_counter = 0;
   uint8_t rx_data = 0;
 
-  uint8_t comm[1][6];
+  uint8_t comm[total_ic][6];
   uint8_t rx_comm[1][8];
   if (((data_len)%3)==0)
   {
@@ -139,12 +144,14 @@ uint8_t read_i2c( uint8_t total_ic , uint8_t address, uint8_t command, uint8_t *
 
   address = address << 1; //convert 7 bit address to 8 bits
 
-  comm[0][0] = START + (address >> 4); //
-  comm[0][1] = ((address)<<4) + NACK ; //
-  comm[0][2] = BLANK + (command >>4);
-  comm[0][3] = (command<<4) + NACK;
-  comm[0][4] = START + (address >> 4); //
-  comm[0][5] = (address<<4) + 0x10 + ACK ; //
+  for(uint8_t i=0; i<total_ic; i++){
+    comm[i][0] = START + (address >> 4); //
+    comm[i][1] = ((address)<<4) + NACK ; //
+    comm[i][2] = BLANK + (command >>4);
+    comm[i][3] = (command<<4) + NACK;
+    comm[i][4] = START + (address >> 4); //
+    comm[i][5] = (address<<4) + 0x10 + ACK ; //
+  }
 
   ltc6811_wrcomm(total_ic,comm);
   ltc6811_rdcomm(total_ic,rx_comm);

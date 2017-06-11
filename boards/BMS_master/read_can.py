@@ -7,20 +7,25 @@ class Cell(object):
 		self.segment = segment
 		self.cell = cell
 		self.voltage = voltage
-		self.temp = None
-		self.vref2 = None
+		self.temp = 0
+		self.temp_voltage = 0
+		self.vref2 = 0
 
 	def display(self):
 		print "Seg: " + str(self.segment) + " Cell: " + str(self.cell) + " V: " + str(self.voltage) + " T: " + str(self.temp)
 
-def voltage_to_temp(voltage):
-    beta = 3950000.0
-    R_0 = 100000.0
-    R_top = 100000.0
-    T_0 = 298 + 25
-    R = (5.0 * R_top / voltage) - R_top
-    temp = beta / (math.log(R) - math.log(R_0) + (beta / T_0)) - 298
-    return temp
+	def voltage_to_temp(self,voltage):
+	    beta = 3950.0
+	    R_0 = 100000.0
+	    R_top = 100000.0
+	    T_0 = 273 + 25
+	    #R = (self.vref2 * R_top / voltage) - R_top
+	    R = voltage * R_top/(self.vref2 - voltage)
+	    if R < 0: #can't take the log of a negative number
+	    	R = 0.0001
+	    print "Vref2: " + str(self.vref2) + " V: "+str(voltage)+" R: "+str(R)
+	    temp = beta / (math.log(R) - math.log(R_0) + (beta / T_0)) - 273	
+	    return temp
 
 
 class CAN(object):
@@ -28,7 +33,7 @@ class CAN(object):
 	def __init__(self, port):
 		self.ser = serial.Serial(port, 115200)
 		self.ser.readline()
-		foo = Cell(None,None,None)
+		foo = Cell(None,None,0)
 		self.battery = [[foo for j in range(12)] for i in range(6)]
 
 	def run(self):
@@ -67,8 +72,10 @@ class CAN(object):
 					temp_volt = temp_volt/10000.0
 					#print "temp_volt: " + str(temp_volt)
 					if not self.battery[segment][cell_num].cell is None:
-						self.battery[segment][cell_num].temp = temp_volt
-						self.battery[segment][cell_num].vref2 = vref2
+						cell = self.battery[segment][cell_num]
+						cell.vref2 = vref2
+						cell.temp_voltage = temp_volt
+						cell.temp = cell.voltage_to_temp(temp_volt)
 					cell_num += 1
 
 
@@ -76,9 +83,9 @@ class CAN(object):
 	def display(self):
 		for segment in self.battery:
 			#bar = [SOME EXPRESSION for item in some_iterable]
-			v_list =  [str(cell.voltage)+"V "+str(cell.temp)+"CV |" for cell in segment]
+			v_list =  [("%0.3f" % cell.temp_voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
-			print str(segment[0].segment) + ": "+str(segment[0].vref2)+"Vref2 |" + string
+			print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
 		print "-----------------------------"
 
 
@@ -86,9 +93,9 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-    # can = CAN('/dev/cu.usbmodem14111')
-    # can.run()
+    can = CAN('/dev/cu.usbmodem14121')
+    can.run()
 
-	voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]
+	#voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]
 
-	temps = [voltage_to_temp(voltage) for voltage in voltages]
+	#temps = [voltage_to_temp(voltage) for voltage in voltages]

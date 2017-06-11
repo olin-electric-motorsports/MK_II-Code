@@ -193,6 +193,7 @@ uint8_t pdat_len = 4;
 uint8_t cell_channel = 0; //0-7 
 uint8_t mux1_address = 0x49;
 uint8_t mux2_address = 0x48;
+uint8_t us_delay = 100;
 
 
 
@@ -594,13 +595,13 @@ void run_command(uint32_t cmd)
       
       break;
 
-    case 24: //set muxes to mux 1 channel 2
+    case 24: //set muxes to mux 1 channel 3
       wakeup_sleep(TOTAL_IC);
       ltc6811_wrcfg(TOTAL_IC,tx_cfg);
       mux_disable(TOTAL_IC, mux2_address); //disable other mux
       //set_mux_channel(TOTAL_IC, mux1_address, 7);
       set_mux_channel(TOTAL_IC, mux1_address, 3); 
-      Serial.println("Mux 1, Channel 2");
+      Serial.println("Mux 1, Channel 3");
       break;
 
     case 25: //set muxes to mux 1 channel 2
@@ -631,13 +632,16 @@ void run_command(uint32_t cmd)
 
     case 26: //read cell temp
       wakeup_sleep(TOTAL_IC);
-      ltc6811_wrcfg(TOTAL_IC,tx_cfg);
+      //ltc6811_wrcfg(TOTAL_IC,tx_cfg);
       mux_disable(TOTAL_IC, mux2_address); //disable mux 2
       for(uint8_t i = 0; i < 6; i++){ //read from mux 1
-        set_mux_channel(TOTAL_IC, mux1_address, 0);
-        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+        wakeup_idle(TOTAL_IC);
+        set_mux_channel(TOTAL_IC, mux1_address, i);
+        delayMicroseconds(100);
+        wakeup_idle(TOTAL_IC);
+        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_GPIO1);
         ltc6811_pollAdc();
-      
+        wakeup_idle(TOTAL_IC);
         error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
         check_error(error);
         print_aux();
@@ -645,10 +649,13 @@ void run_command(uint32_t cmd)
 
       mux_disable(TOTAL_IC, mux1_address); //disable mux 1
       for(uint8_t i = 0; i < 6; i++){ //read from mux 2
-        set_mux_channel(TOTAL_IC, mux2_address, 0);
-        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL);
+        wakeup_idle(TOTAL_IC);
+        set_mux_channel(TOTAL_IC, mux2_address, i);
+        delayMicroseconds(100);
+        wakeup_idle(TOTAL_IC);
+        ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_GPIO1);
         ltc6811_pollAdc();
-      
+        wakeup_idle(TOTAL_IC);
         error = ltc6811_rdaux(0,TOTAL_IC,aux_codes); // Set to read back all aux registers
         check_error(error);
         print_aux();
@@ -705,9 +712,9 @@ void print_menu()
   Serial.println(F("                                  | Write/Read EEprom: 19"));
   Serial.println(F("                                  | Write EEprom: 20"));
   Serial.println(F("                                  | Read EEprom: 21"));
-  Serial.println(F("                                  | Set MUX to cell 1 temp: 22"));
-  Serial.println(F("                                  | Set MUX to cell 2 temp: 23"));
-  Serial.println(F("                                  | Read Cell Temp: 26"));
+  Serial.println(F("                                  | Disable Muxes: 22"));
+  Serial.println(F("M1C0 -> M2C0 W/ print: 23         | M1C3: 24"));
+  Serial.println(F("Loop M1C0 -> M2C0: 25             | Read Cell Temp: 26"));
   Serial.println();
   Serial.println(F("Please enter command: "));
   Serial.println();

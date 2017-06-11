@@ -65,6 +65,7 @@ const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 
 const uint16_t THERM_V_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
 
 
+
 /******************************************************
  *** Global Battery Variables received from 681x commands
  These variables store the results from the ltc6811
@@ -103,7 +104,7 @@ uint16_t cell_vref2[TOTAL_IC][CELL_CHANNELS];
   |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     | IC1 Cell 12        | IC2 Cell 1         |IC2 Cell 2       |  .....   |
 ****/
 
-uint16_t discharge_status[TOTAL_IC]
+uint16_t discharge_status[TOTAL_IC];
 /*!<
   Whether each cell is discharging will be stored in the discharge_status[12] array in the following format:
   |discharge_status[0]  |discharge_status[1]  |discharge_status[2]  |    .....     | discharge_status[TOTAL_IC]  |
@@ -112,8 +113,8 @@ uint16_t discharge_status[TOTAL_IC]
 ****/
 
 /* Config register for comms with LTC6804 */
-uint8_t tx_cfg[TOTAL_IC][8]
-uint8_t rx_cfg[TOTAL_IC][8]
+uint8_t tx_cfg[TOTAL_IC][8];
+uint8_t rx_cfg[TOTAL_IC][8];
 
 int main (void)
 {
@@ -166,27 +167,35 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
-    //EXT_LED_PORT &= ~_BV(LED_ORANGE);
 
     while(1) {
 
-        PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
-        PORTC &= ~_BV(PROG_LED_3);
+        //PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
+        //PORTC &= ~_BV(PROG_LED_3);
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
         if (FLAGS & OPEN_SHDN) {
             PORTB &= ~_BV(PB2); //open relay
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1);
+            PORTB |= _BV(PROG_LED_1); 
+        } else {
+          PORTB &= ~_BV(PROG_LED_1);
         }
+
         if (FLAGS & OVER_VOLTAGE) { //Set LED D8, PB6
             PORTB |= _BV(PROG_LED_2);
+        } else {
+          PORTB &= ~_BV(PROG_LED_2);
         }
+
         if (FLAGS & OVER_TEMP) { //Set LED D9, PC0
             PORTC |= _BV(PROG_LED_3);
+        } else {
+          PORTC &= ~_BV(PROG_LED_3);
         }
 
         if (FLAGS & READ_VALS) {
@@ -442,6 +451,9 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
+        if (i == 5) { //ignore the thermistor that is shorted low
+            aux_codes[3][0] = aux_codes[3][5] - 1;
+        }
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
             if (aux_codes[i][0] < THERM_UV_THRESHOLD) {
                 FLAGS |= OVER_TEMP;
@@ -708,7 +720,7 @@ void disable_discharge(uint8_t ic, uint8_t cell)
   {
     tx_cfg[ic-1][5] &= ~(1<<(cell-9));
   }
-  discharge_status[ic-1] &= ~(1 << (cell-1))
+  discharge_status[ic-1] &= ~(1 << (cell-1));
 }
 
 //This function will block operation until the ADC has finished it's conversion
