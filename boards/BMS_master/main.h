@@ -2,6 +2,7 @@ int main(void);
 
 void transmit_voltages(void);
 void transmit_temperatures(void);
+void transmit_discharge_status(void);
 
 void init_read_timer(void);
 void init_fan_pwm(uint8_t duty_cycle);
@@ -17,12 +18,19 @@ void spi_write_read(uint8_t tx_Data[], uint8_t tx_len, uint8_t* rx_data, uint8_t
 void set_mux_channel(uint8_t total_ic, uint8_t i2c_address, uint8_t channel);
 void mux_disable(uint8_t total_ic, uint8_t i2c_address);
 
+void init_cfg(void);
+
 void wakeup_idle(uint8_t total_ic);
 void wakeup_sleep(uint8_t total_ic);
 
 void o_ltc6811_rdcfg(uint8_t total_ic, //Number of ICs in the system
                      uint8_t r_config[][8] //A two dimensional array that the function stores the read configuration data.
                  );
+void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
+                uint8_t config[][6] //A two dimensional array of the configuration data that will be written
+              );
+void enable_discharge(uint8_t ic, uint8_t cell);
+void disable_discharge(uint8_t ic, uint8_t cell);
 uint32_t o_ltc6811_pollAdc(void);
 void o_ltc6811_adcv(
   uint8_t MD, //ADC Mode

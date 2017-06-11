@@ -199,6 +199,7 @@ int main (void)
             //update discharge transistors
             o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             transmit_temperatures();
+            transmit_discharge_status();
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
@@ -313,28 +314,24 @@ void transmit_temperatures(void)
 
 /*!<
   Cell Voltages will be transmitted in this CAN message, LSB = 0.0001:
-  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[6] |            msg[7] |
+  |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[5] |            msg[6] |
   |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
-  |IC/Segment number |first cell index  |msg Cell 1 High   |msg Cell 1 Low    |    .....     |msg Cell 3 High    |msg Cell 3 Low     |
+  |IC group (0 or 1) |IC1 Status High   |IC1 Status Low    |IC2 Status High   |    .....     |msg Cell 3 High    |IC 3 Status Low    |
 ****/
-void transmit_voltages(void)
+void transmit_discharge_status(void)
 {
     //Declare message variable out here
     uint8_t msg[8];
-    for (uint8_t i = 0; i < TOTAL_IC; i++) {//Iterate through ICs
+    for (uint8_t i = 0; i < 2; i++) {//Send two different messages
         msg[0] = i; //
-        for (uint8_t j = 0; j < 4; j++) { //4 messages per IC
-            uint8_t idx = j * 3;
-            msg[1] = idx;
-            for (uint8_t k = 0; k < 3; k++) { //3 cells per message
-                uint16_t cell_voltage = cell_codes[i][idx + k];
-                msg[2+k*2] = (uint8_t)(cell_voltage >> 8); //High byte
-                msg[3+k*2] = (uint8_t)cell_voltage;  //Low byte
-            }
-
-            CAN_transmit(1, 0x13, 8, msg);
-            _delay_ms(5);
+        for (uint8_t k = 0; k < 3; k++) { //3 ICs per message
+            uint16_t disch_status = discharge_status[(i*3) + k];
+            msg[1+k*2] = (uint8_t)(disch_status >> 8); //High byte
+            msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
+
+        CAN_transmit(3, 0x15, 7, msg);
+        _delay_ms(5);
     }
 
 }
@@ -540,7 +537,7 @@ void mux_disable(uint8_t total_ic, uint8_t i2c_address)
 /*!***********************************
  \brief Initializes the configuration array
  **************************************/
-void init_cfg()
+void init_cfg(void)
 {
   uint16_t uv_val = (UV_THRESHOLD/16)-1;
   uint16_t ov_val = (OV_THRESHOLD/16);
