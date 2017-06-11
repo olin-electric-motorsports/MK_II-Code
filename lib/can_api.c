@@ -9,6 +9,9 @@ uint8_t CAN_init (uint8_t mode)
     // CAN prescaler timing prescaler set to 0
     CANTCON = 0x00; 
 
+    // Set Error passive state
+    CANGSTA |= _BV(ERRP);
+
     // Set BAUD rate
     /* 500 kbps
     CANBT1 = 0x00;
@@ -64,7 +67,7 @@ uint8_t CAN_init (uint8_t mode)
 }
 
 
-uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t msg[])
+uint8_t CAN_transmit (uint8_t mob, uint16_t ident, uint8_t msg_length, uint8_t msg[])
 {
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
@@ -79,8 +82,7 @@ uint8_t CAN_transmit (uint8_t mob, uint8_t ident, uint8_t msg_length, uint8_t ms
     CANSTMOB = 0x00;
 
     // Set MOb ID
-    //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
-    CANIDT1 = (uint8_t) (ident >> 3); // node ID
+    CANIDT1 = (uint8_t) (ident >> 3);
     CANIDT2 = (uint8_t) (ident << 5);
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
@@ -132,7 +134,7 @@ uint8_t CAN_transmit_success (uint8_t mob)
 }
 
 
-uint8_t CAN_wait_on_receive (uint8_t mob, uint8_t ident, uint8_t mask, uint8_t msg_length)
+uint8_t CAN_wait_on_receive (uint8_t mob, uint16_t ident, uint8_t msg_length, uint16_t mask)
 {
     // Check that the MOb is free
     if( bit_is_set(CANEN2, mob) ){
@@ -146,17 +148,15 @@ uint8_t CAN_wait_on_receive (uint8_t mob, uint8_t ident, uint8_t mask, uint8_t m
     CANSTMOB = 0x00;
 
     // Set MOb ID
-    //CANIDT1 = ((nodeID & 0x1F) << 3); // node ID
-    CANIDT1 = ident;
-    CANIDT2 = 0x00;
+    CANIDT1 = (uint8_t) (ident >> 3); // node ID
+    CANIDT2 = (uint8_t) (ident << 5);
     CANIDT3 = 0x00;
     CANIDT4 = 0x00; // Data frame
 
     // Set up MASK
-    CANIDM1 = mask;  // CANIDM1 & 2 are the only ones that matter
-    CANIDM2 = 0x00;  // in 11 bit mode.
+    CANIDM1 = (uint8_t) (mask >> 3);
+    CANIDM2 = (uint8_t) (mask << 5);
     CANIDM3 = 0x00;
-    //CANIDM4 = 0x00; // Ignore what is set above
     CANIDM4 = (_BV(RTRMSK) | _BV(IDEMSK)); // Use what is set above
 
     // Begin waiting for Rx
