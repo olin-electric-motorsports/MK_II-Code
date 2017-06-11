@@ -119,21 +119,25 @@ static inline void read_all_pins(void) {
     // This is the Shutdown sense that really matters
     if (bit_is_clear(PIN_FINAL_SHUTDOWN, FINAL_SHUTDOWN)) {
         PORT_LED2 |= _BV(LED2);
-        gFLAG |= _BV(SET_PRECHARGE);
+        if (bit_is_clear(gFLAG, SET_AIR)) {
+            gFLAG |= _BV(SET_PRECHARGE);
+        }
+        gCAN_MSG[4] = 0xFF;
     } else {
         PORT_LED2 &= ~_BV(LED2);
         gFLAG &= ~_BV(SET_PRECHARGE);
         gFLAG &= ~_BV(SET_AIR);
         gPRECHARGE_TIMER = 0x00;
+        gCAN_MSG[4] = 0x00;
     }
 
-    if (bit_is_set(PIN_AFAG, AFAG)) {
+    if (bit_is_clear(PIN_AFAG, AFAG)) {
         gCAN_MSG[CAN_IDX_AFAG] = 0xFF;
     } else {
         gCAN_MSG[CAN_IDX_AFAG] = 0x00;
     }
 
-    if (bit_is_set(PIN_ADAE, ADAE)) {
+    if (bit_is_clear(PIN_ADAE, ADAE)) {
         gCAN_MSG[CAN_IDX_ADAE] = 0xFF;
     } else {
         gCAN_MSG[CAN_IDX_ADAE] = 0x00;
@@ -199,10 +203,20 @@ int main(void) {
             gFLAG &= ~_BV(UPDATE_STATUS);
         }
 
+        if (bit_is_set(gFLAG, SET_PRECHARGE)) {
+            PORT_PRECHARGE |= _BV(PRECHARGE);
+            gCAN_MSG[0] = 0xFF;
+        } else {
+            PORT_PRECHARGE &= ~_BV(PRECHARGE);
+            gCAN_MSG[0] = 0x00;
+        }
+
         if (bit_is_set(gFLAG, SET_AIR)) {
             PORT_AIR |= _BV(AIR);
+            gCAN_MSG[1] = 0xFF;
         } else {
             PORT_AIR &= ~_BV(AIR);
+            gCAN_MSG[1] = 0x00;
         }
 
         if (bit_is_clear(CANEN2, 1)) {
