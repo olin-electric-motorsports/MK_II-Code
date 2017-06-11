@@ -5,15 +5,20 @@
 #include "lcd.h"
 
 /* Definitions */
-#define LED1  PB6
-#define LED2  PB7
+#define LED1       PB6
+#define LED2       PB7
 #define PORT_LED1  PORTB
 #define PORT_LED2  PORTB
 
-#define START_LED  PB4
+#define START_LED       PB4
 #define PORT_START_LED  PORTB
 
-#define FLAG_STARTUP_BUTTON 0
+#define R2D       PD6
+#define PORT_R2D  PORTD
+
+#define FLAG_STARTUP_BUTTON  0
+#define FLAG_BRAKE_PEDAL     1
+#define FLAG_AIR_CLOSED      2
 
 
 /* Global Variables */
@@ -21,23 +26,24 @@ volatile uint8_t gFlags = 0x00;
 uint8_t gFlags_old = 0x00;
 uint8_t gCANMessage[8] = { 0, 0, 0, 0,
                            0, 0, 0, 0 };
+volatile uint8_t gR2DTimeout = 0x00;
 
 /* Interrupts */
 ISR(CAN_INT_vect) {
 
-    // Check first MOb
+    // Check first MOb (Throttle)
     CANPAGE = (0 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         // Unrolled read for 5th byte
         volatile uint8_t msg = CANMSG;
         msg = CANMSG;
         msg = CANMSG;
-        msg = CANMSG;
-        msg = CANMSG;
 
+        // Brake status
         if (msg == 0x01) {
-            // Ready to drive sound
-            PORTD |= _BV(PD6);
+            gFlags |= _BV(FLAG_BRAKE_PEDAL);
+        } else {
+            gFlags &= ~_BV(FLAG_BRAKE_PEDAL);
         }
 
         // Reset status
@@ -48,8 +54,7 @@ ISR(CAN_INT_vect) {
                             CAN_IDM_single);
     }
 
-
-    // Check second MOb
+    // Check second MOb (BMS)
     CANPAGE = (1 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -73,6 +78,25 @@ ISR(CAN_INT_vect) {
                             CAN_IDT_BMS_MASTER_L, 
                             CAN_IDM_single);
     }
+
+    CANPAGE = (2 << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG;
+        msg = CANMSG;
+        
+        if (msg == 0xFF) {
+            gFlags |= _BV(FLAG_AIR_CLOSED);
+        } else {
+            gFlags &= ~_BV(FLAG_AIR_CLOSED);
+        }
+
+        // Reset Status
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(2,
+                            CAN_IDT_AIR_CONTROL,
+                            CAN_IDT_AIR_CONTROL_L,
+                            CAN_IDM_single);
+    }
 }
 
 ISR(PCINT0_vect) {
@@ -84,7 +108,8 @@ ISR(PCINT0_vect) {
 }
 
 ISR(TIMER0_COMPA_vect) {
-    uint8_t err = CAN_transmit(2, 
+    // CAN stuff
+    uint8_t err = CAN_transmit(3, 
                                CAN_IDT_DASHBOARD, 
                                CAN_IDT_DASHBOARD_L, 
                                gCANMessage);
@@ -94,6 +119,13 @@ ISR(TIMER0_COMPA_vect) {
         // TODO: Actually display error
         CANPAGE = (2 << MOBNB0);
         CANSTMOB = 0x00;
+    }
+
+    // R2D timeout
+    if (gR2DTimeout == 0) {
+        PORT_R2D &= ~_BV(R2D);
+    } else {
+        gR2DTimeout--;
     }
 }
 
@@ -113,22 +145,40 @@ void initTimer(void) {
 }
 
 void updateStateFromFlags(void) {
+    uint8_t diff = gFlags^gFlags_old;
 
-    // TODO: Do some clever bit magic so any
-    // flag change doesn't set off this branch
-    if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)) {
+    if (bit_is_set(diff, FLAG_STARTUP_BUTTON)) {
+        if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)) {
+            PORT_START_LED |= _BV(START_LED);
+        } else {
+            PORT_START_LED &= ~_BV(START_LED);
+        }
+    }
+
+    // Update our CAN message
+    if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)
+            && bit_is_set(gFlags, FLAG_BRAKE_PEDAL)) {
         gCANMessage[0] = 0xFF;
-        lcd_gotoxy(0, 1);
-        lcd_puts("Startup On ");
     } else {
         gCANMessage[0] = 0x00;
-        lcd_gotoxy(0, 1);
-        lcd_puts("Startup Off");
+    }
+
+    if (bit_is_set(gFlags, FLAG_AIR_CLOSED)) {
+        // Enable R2D sound
+        PORT_R2D |= _BV(R2D);
+        gR2DTimeout = 30;
+
+        // Print to screen
+        lcd_gotoxy(0, 0);
+        lcd_puts("R2D On");
     }
 }
 
 int main(void) {
     sei();
+    // Setup IO
+    DDRD |= _BV(R2D);
+    DDRB |= _BV(PB4) | _BV(PB6) | _BV(PB7);
 
     // Sense Start button
     PCICR |= _BV(PCIE0);
@@ -142,8 +192,18 @@ int main(void) {
     CAN_init(CAN_ENABLED);
 
     // Wait on CAN
-    CAN_wait_on_receive(0, CAN_IDT_THROTTLE, CAN_IDT_THROTTLE_L, CAN_IDM_single);
-    CAN_wait_on_receive(1, CAN_IDT_BMS_MASTER, CAN_IDT_BMS_MASTER_L, CAN_IDM_single);
+    CAN_wait_on_receive(0,
+                        CAN_IDT_THROTTLE,
+                        CAN_IDT_THROTTLE_L,
+                        CAN_IDM_single);
+    CAN_wait_on_receive(1,
+                        CAN_IDT_BMS_MASTER,
+                        CAN_IDT_BMS_MASTER_L,
+                        CAN_IDM_single);
+    CAN_wait_on_receive(2,
+                        CAN_IDT_AIR_CONTROL,
+                        CAN_IDT_AIR_CONTROL_L,
+                        CAN_IDM_single);
 
     // Print something
     lcd_puts("I am Dashboard!");
