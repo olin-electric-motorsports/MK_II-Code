@@ -5,6 +5,7 @@ void transmit_temperatures(void);
 
 void init_read_timer(void);
 void init_fan_pwm(uint8_t duty_cycle);
+void init_cfg(void);
 
 uint8_t read_all_voltages(void);
 uint8_t read_all_temperatures(void);
@@ -49,6 +50,11 @@ void o_ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register i
                     uint8_t total_ic, //The number of ICs in the system
                     uint8_t *data //Array of the unparsed auxiliary codes
                 );
+
+void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
+                   uint8_t config[][6] //A two dimensional array of the configuration data that will be written
+                  );
+
 uint16_t pec15_calc(uint8_t len, //Number of bytes that will be used to calculate a PEC
                 uint8_t *data //Array of data that will be used to calculate  a PEC
             );
