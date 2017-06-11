@@ -96,14 +96,6 @@ uint16_t cell_temperatures[TOTAL_IC][CELL_CHANNELS];
   |IC1 Cell 1               |IC1 Cell 2               |IC1 Cell 3               |    .....     |  IC1 Cell 12             |IC2 Cell 1                |IC2 Cell 2              | .....    |
 ****/
 
-uint16_t cell_vref2[TOTAL_IC][CELL_CHANNELS];
-/*!<
-  The cell temperatures will be stored in the cell_temperatures[][12] array in the following format:
-  |cell_vref2[0][0]  |cell_vref2[0][1]  |cell_vref2[0][2]  |    .....     | cell_vref2[0][11]  |  cell_vref2[1][0]  | cell_vref2[1][1]|  .....   |
-  |----------------- |------------------|------------------|--------------|--------------------|--------------------|-----------------|----------|
-  |IC1 Cell 1        |IC1 Cell 2        |IC1 Cell 3        |    .....     | IC1 Cell 12        | IC2 Cell 1         |IC2 Cell 2       |  .....   |
-****/
-
 uint16_t discharge_status[TOTAL_IC];
 /*!<
   Whether each cell is discharging will be stored in the discharge_status[12] array in the following format:
@@ -427,13 +419,9 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
-            // if (aux_codes[j][0] < THERM_V_FRACTION) {
-            //     FLAGS |= OVER_TEMP;
-            //     error += 1;
-            // }
             cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
             uint32_t _cell_temp_mult = cell_temperatures[j][i*2] * THERM_V_FRACTION;
-            uint32_t _cell_ref_mult = cell_vref2[j][i*2] * 1000;
+            uint32_t _cell_ref_mult = aux_codes[j][5] * 1000;
             if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
                 error += 1;
@@ -455,11 +443,13 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
             aux_codes[3][0] = aux_codes[3][5] - 1;
         }
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
-            if (aux_codes[i][0] < THERM_UV_THRESHOLD) {
+            cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; //Store temperatures
+            uint32_t _cell_temp_mult = cell_temperatures[j][i*2 + 1] * THERM_V_FRACTION;
+            uint32_t _cell_ref_mult = aux_codes[j][5] * 1000;
+            if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
                 error += 1;
             }
-            cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; //Store temperatures
         }
     }
 
