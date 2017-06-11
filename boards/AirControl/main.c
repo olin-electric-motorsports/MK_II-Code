@@ -17,12 +17,13 @@
 #define PORT_EXT_LED2  PORTB
 
 // Shutdown
-#define AHU        PC7
+#define FINAL_SHUTDOWN  PC7
+#define PIN_FINAL_SHUTDOWN  PINC
+
 #define AFAG       PB5
 #define ADAE       PB6
 #define TAC        PB7
 #define RS         PD0
-#define PIN_AHU    PINC
 #define PIN_AFAG   PINB
 #define PIN_ADAE   PINB
 #define PIN_TAC    PINB
@@ -54,33 +55,40 @@ volatile uint8_t gFLAG = 0x01;
 
 uint8_t gCAN_MSG[8] = { 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00 };
+uint8_t gPRECHARGE_TIMER = 0x00;
 
 
 // CAN
-ISR(CAN_INT_vect)
-{
+ISR(CAN_INT_vect) {
 }
 
 
 // 8-bit Timer
-ISR(TIMER0_COMPA_vect)
-{
+ISR(TIMER0_COMPA_vect) {
     // We just set a flag here and let main() handle
     // things
     gFLAG |= _BV(UPDATE_STATUS);
+    
+    if (bit_is_set(gFLAG, SET_PRECHARGE)) {
+        if (gPRECHARGE_TIMER > 200) {
+            gPRECHARGE_TIMER = 0x00;
+            gFLAG &= ~_BV(SET_PRECHARGE);
+            gFLAG |= _BV(SET_AIR);
+        } else {
+            gPRECHARGE_TIMER++;
+        }
+    }
 }
 
 
 // 16-bit Timer
-ISR(TIMER1_COMPA_vect) 
-{
+ISR(TIMER1_COMPA_vect) {
 }
 
 
 // Set up the 8-bit timer
 // Used for Polling timing
-static inline void setup_8bit_timer(void)
-{
+static inline void setup_8bit_timer(void) {
     // Set timer mode to CTC
     TCCR0A |= _BV(WGM01);
 
@@ -99,38 +107,30 @@ static inline void setup_8bit_timer(void)
 
 // Set up the 16-bit timer
 // Used for precharge timing
-static inline void setup_16bit_timer(void)
-{
+static inline void setup_16bit_timer(void) {
 }
 
 // Poll every input pin and update
 // our CAN values.
-static inline void read_all_pins(void)
-{
-    if (bit_is_set(PIN_AHU, AHU))
-    {
-        gCAN_MSG[CAN_IDX_AHU] = 0xFF;
-    }
-    else
-    {
-        gCAN_MSG[CAN_IDX_AHU] = 0x00;
+static inline void read_all_pins(void) {
+    // This is the Shutdown sense that really matters
+    if (bit_is_set(PIN_FINAL_SHUTDOWN, FINAL_SHUTDOWN)) {
+        gFLAG |= _BV(SET_PRECHARGE);
+    } else {
+        gFLAG &= ~_BV(SET_PRECHARGE);
+        gFLAG &= ~_BV(SET_AIR);
+        gPRECHARGE_TIMER = 0x00;
     }
 
-    if (bit_is_set(PIN_AFAG, AFAG))
-    {
+    if (bit_is_set(PIN_AFAG, AFAG)) {
         gCAN_MSG[CAN_IDX_AFAG] = 0xFF;
-    }
-    else
-    {
+    } else {
         gCAN_MSG[CAN_IDX_AFAG] = 0x00;
     }
 
-    if (bit_is_set(PIN_ADAE, ADAE))
-    {
+    if (bit_is_set(PIN_ADAE, ADAE)) {
         gCAN_MSG[CAN_IDX_ADAE] = 0xFF;
-    }
-    else
-    {
+    } else {
         gCAN_MSG[CAN_IDX_ADAE] = 0x00;
     }
 
@@ -152,8 +152,7 @@ static inline void read_all_pins(void)
 }
 
 
-int main(void)
-{
+int main(void) {
     sei();
 
     // Initialize CAN
@@ -169,10 +168,8 @@ int main(void)
     // Start with reading of the ports
     gFLAG |= _BV(UPDATE_STATUS);
 
-    while(1)
-    {
-        if (bit_is_set(gFLAG, UPDATE_STATUS))
-        {
+    while(1) {
+        if (bit_is_set(gFLAG, UPDATE_STATUS)) {
             // Blink our light for timing check
             PORT_LED1 ^= _BV(LED1);
             //PORT_LED2 ^= _BV(LED2);
@@ -184,12 +181,9 @@ int main(void)
             // Turn on LED2 if all shutdown is high
             if ( gCAN_MSG[CAN_IDX_AHU] == 0xFF  &&
                  gCAN_MSG[CAN_IDX_AFAG] == 0xFF &&
-                 gCAN_MSG[CAN_IDX_ADAE] == 0xFF )
-            {
+                 gCAN_MSG[CAN_IDX_ADAE] == 0xFF ) {
                 PORT_LED2 |= _BV(LED2);
-            }
-            else
-            {
+            } else {
                 PORT_LED2 &= ~_BV(LED2);
             }
 
@@ -200,20 +194,13 @@ int main(void)
             gFLAG &= ~_BV(UPDATE_STATUS);
         }
 
-        if (bit_is_set(gFLAG, SET_PRECHARGE))
-        {
-            // TODO: implement
-            gFLAG &= ~_BV(SET_PRECHARGE);
+        if (bit_is_set(gFLAG, SET_AIR)) {
+            PORT_AIR |= _BV(AIR);
+        } else {
+            PORT_AIR &= ~_BV(AIR);
         }
 
-        if (bit_is_set(gFLAG, SET_AIR))
-        {
-            // TODO: implement
-            gFLAG &= ~_BV(SET_AIR);
-        }
-
-        if (bit_is_clear(CANEN2, 1))
-        {
+        if (bit_is_clear(CANEN2, 1)) {
             CAN_wait_on_receive(1, CAN_IDT_THROTTLE, CAN_IDT_TRANSOM_L, CAN_IDM_single);
         }
 
