@@ -70,6 +70,7 @@ ISR(TIMER0_COMPA_vect) {
     gFLAG |= _BV(UPDATE_STATUS);
     
     if (bit_is_set(gFLAG, SET_PRECHARGE)) {
+        PORT_EXT_LED2 |= _BV(EXT_LED2);
         if (gPRECHARGE_TIMER > 200) {
             gPRECHARGE_TIMER = 0x00;
             gFLAG &= ~_BV(SET_PRECHARGE);
@@ -77,6 +78,8 @@ ISR(TIMER0_COMPA_vect) {
         } else {
             gPRECHARGE_TIMER++;
         }
+    } else {
+        PORT_EXT_LED2 &= ~_BV(EXT_LED2);
     }
 }
 
@@ -114,9 +117,11 @@ static inline void setup_16bit_timer(void) {
 // our CAN values.
 static inline void read_all_pins(void) {
     // This is the Shutdown sense that really matters
-    if (bit_is_set(PIN_FINAL_SHUTDOWN, FINAL_SHUTDOWN)) {
+    if (bit_is_clear(PIN_FINAL_SHUTDOWN, FINAL_SHUTDOWN)) {
+        PORT_LED2 |= _BV(LED2);
         gFLAG |= _BV(SET_PRECHARGE);
     } else {
+        PORT_LED2 &= ~_BV(LED2);
         gFLAG &= ~_BV(SET_PRECHARGE);
         gFLAG &= ~_BV(SET_AIR);
         gPRECHARGE_TIMER = 0x00;
@@ -182,9 +187,9 @@ int main(void) {
             if ( gCAN_MSG[CAN_IDX_AHU] == 0xFF  &&
                  gCAN_MSG[CAN_IDX_AFAG] == 0xFF &&
                  gCAN_MSG[CAN_IDX_ADAE] == 0xFF ) {
-                PORT_LED2 |= _BV(LED2);
+                //PORT_LED2 |= _BV(LED2);
             } else {
-                PORT_LED2 &= ~_BV(LED2);
+                //PORT_LED2 &= ~_BV(LED2);
             }
 
             // Transmit after read
