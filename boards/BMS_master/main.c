@@ -388,6 +388,9 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
+        if (i == 5) { //ignore the thermistor that is shorted low
+            aux_codes[3][0] = aux_codes[3][5] - 1;
+        }
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
             if (aux_codes[i][0] < THERM_UV_THRESHOLD) {
                 FLAGS |= OVER_TEMP;

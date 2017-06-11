@@ -13,6 +13,6 @@ def voltage_to_temp(voltage):
 if __name__ == '__main__':
     # can = CAN('/dev/cu.usbmodem14111')
     # can.run()
-    voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]
+    voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554, 0.01]
     temps = [voltage_to_temp(voltage) for voltage in voltages]
     print(temps)
