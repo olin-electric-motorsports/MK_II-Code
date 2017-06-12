@@ -52,14 +52,14 @@ class CAN(object):
 				cell_num = int(bytes[1],0)
 				for i in range(3):
 					volts = (int(bytes[(i+1)*2],0)<<8)|int(bytes[(i+1)*2+1],0)
-					cell = Cell(segment,cell_num,volts/10000.0)
+					cell = Cell(segment,cell_num,volts)#/10000.0)
 					#cell.display()
 					if self.battery[segment][cell_num].cell is None:
 						self.battery[segment][cell_num] = cell
 					else:
 						self.battery[segment][cell_num].cell = cell_num
 						self.battery[segment][cell_num].segment = segment
-						self.battery[segment][cell_num].voltage = volts/10000.0
+						self.battery[segment][cell_num].voltage = volts#/10000.0
 					cell_num += 1
 			if (can_id == '0x14'): #temperature message
 				message = line.split("MSG:", 1)[1]
@@ -93,7 +93,7 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-    can = CAN('/dev/cu.usbmodem14121')
+    can = CAN('/dev/cu.usbmodem14111')
     can.run()
 
 	#voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]

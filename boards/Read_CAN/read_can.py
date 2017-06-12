@@ -5,7 +5,7 @@ class Message(object):
     def __init__(self, can_id, bytes, line):
         self.can_id = can_id
         self.bytes = bytes
-        self.time = time.gmtime()
+        self.time = time.time()
         self.line = line
 
 
@@ -27,7 +27,7 @@ class CAN(object):
                 #    print line
                 if can_id in self.message_dict.keys():
                     #update message in dictionary
-                    self.message_dict[can_id].time = time.gmtime()
+                    self.message_dict[can_id].time = time.time()
                     self.message_dict[can_id].bytes = bytes
                     self.message_dict[can_id].line = line
                 else:
@@ -41,8 +41,8 @@ class CAN(object):
             #v_list =  [("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
             #string = " ".join(str(x) for x in v_list)
             #print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
-
-            print self.message_dict[key].line
+            if ((time.time() - self.message_dict[key].time) < 10):
+                print self.message_dict[key].line
 
         print "-----------------------------"
 

@@ -28,7 +28,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x48
 
 //LTC68xx defs
-#define TOTAL_IC 6
+#define TOTAL_IC 1
 
 #define ENABLED 1
 #define DISABLED 0
@@ -128,6 +128,7 @@ int main (void)
 
     //CAN init
     CAN_init(CAN_ENABLED);
+    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
 
     //Read Timer init
     init_read_timer();
@@ -136,7 +137,7 @@ int main (void)
     init_fan_pwm(0x10);
 
     //Watchdog init
-    wdt_enable(WDTO_4S);
+    wdt_enable(WDTO_8S);
     //wdt_disable();
 
     // SPI init
@@ -168,8 +169,8 @@ int main (void)
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
         if (FLAGS & OPEN_SHDN) {
-            PORTB &= ~_BV(PB2); //open relay
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //PORTB &= ~_BV(PB2); //open relay
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
@@ -195,10 +196,10 @@ int main (void)
             uint8_t error = 0;
             error += read_all_voltages();
             error += read_all_temperatures();
+            o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             //Probably want to do something with error in the future
             transmit_voltages();
             //update discharge transistors
-            o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             transmit_temperatures();
             transmit_discharge_status();
 
@@ -217,21 +218,26 @@ int main (void)
 //ISRs//////////////////////////////////////////////////////////////////////////
 
 ISR(CAN_INT_vect){
-    CANPAGE = 0x00; //reset the CAN page
+    // Check first MOb (AIR Control)
+    CANPAGE = (0 << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
+        msg = CANMSG;
+        //uint8_t test_msg[1] =  {msg};
+        //CAN_transmit(0, 0x18, 1, test_msg);  
 
-    volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
-    msg = CANMSG;
+        if (msg) {
+            FLAGS |= AIRS_CLOSED;
+            EXT_LED_PORT |= _BV(LED_ORANGE);
+        }
+        if (msg == 0) {
+            FLAGS &= ~(AIRS_CLOSED);
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+        }
 
-    if (msg) {
-        FLAGS |= AIRS_CLOSED;
+        //setup to receive again
+        CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
     }
-    if (msg == 0) {
-        FLAGS &= ~(AIRS_CLOSED);
-    }
-    PORTB ^= _BV(PB6);
-
-    //setup to receive again
-    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
 }
 
 ISR(PCINT0_vect)
@@ -327,16 +333,16 @@ void transmit_temperatures(void)
 void transmit_discharge_status(void)
 {
     //Declare message variable out here
-    uint8_t msg[8];
-    for (uint8_t i = 0; i < 2; i++) {//Send two different messages
+    uint8_t msg[8] = {0,0,0,0,0,0,0,0};
+    for (uint8_t i = 0; i < TOTAL_IC%3; i++) {//Send two different messages
         msg[0] = i; //
-        for (uint8_t k = 0; k < 3; k++) { //3 ICs per message
+        for (uint8_t k = 0; k < TOTAL_IC%2; k++) { //3 ICs per message
             uint16_t disch_status = discharge_status[(i*3) + k];
             msg[1+k*2] = (uint8_t)(disch_status >> 8); //High byte
             msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
 
-        CAN_transmit(3, 0x15, 7, msg);
+        CAN_transmit(3, 0x15+i, 7, msg);
         _delay_ms(5);
     }
 
@@ -349,7 +355,7 @@ void init_read_timer(void) {
     TCCR1B &= ~(_BV(CS10) | _BV(CS11));
     TCCR1B |= _BV(CS12)  | _BV(WGM12); //Set prescaler to 1/256
     TIMSK1 |= _BV(OCIE1A); // Enable overflow interrupts (set TOIE)
-    OCR1A |= 30000; //timer compare value
+    OCR1A |= 65000; //timer compare value
 }
 
 
@@ -379,14 +385,23 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     error = o_ltc6811_rdcv(0,TOTAL_IC,cell_codes); //Parse ADC measurements
 
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
+        
         for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
             if (cell_codes[i][j] > OV_THRESHOLD) {
                 FLAGS |= OVER_VOLTAGE;
+                if (FLAGS & AIRS_CLOSED){
+                    enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
+                } else {
+                    disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
+                }
                 error += 1;
             } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
+                
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
+                } else {
+                    disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
                 }
 
             } else {
@@ -403,6 +418,7 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
         //upon successful execution clear flags
         FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
     }
+
     return error;
 }
 
@@ -682,7 +698,7 @@ void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
     }
 
 
-    //wakeup_idle ();                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
+    wakeup_idle(total_ic);                                 //This will guarantee that the ltc6811 isoSPI port is awake.This command can be removed.
 
     PORTB &= ~_BV(PB4); //set CS low
     spi_write_array(cmd, CMD_LEN);
@@ -1303,7 +1319,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
     wrcomm(total_ic,comm);
     stcomm();
     //rdcomm(total_ic,rx_comm);
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //  Serial.print("rx_comm: ");
     //  for(uint8_t i=0; i < 6; i++){
