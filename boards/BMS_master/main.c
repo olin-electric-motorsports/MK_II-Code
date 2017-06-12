@@ -28,7 +28,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x48
 
 //LTC68xx defs
-#define TOTAL_IC 1
+#define TOTAL_IC 6
 
 #define ENABLED 1
 #define DISABLED 0
