@@ -118,6 +118,7 @@ int main (void)
     PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
 
     PORTB |= _BV(PB2); //close relay
+    EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
@@ -169,8 +170,8 @@ int main (void)
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
         if (FLAGS & OPEN_SHDN) {
-            //PORTB &= ~_BV(PB2); //open relay
-            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            PORTB &= ~_BV(PB2); //open relay
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
@@ -228,11 +229,11 @@ ISR(CAN_INT_vect){
 
         if (msg) {
             FLAGS |= AIRS_CLOSED;
-            EXT_LED_PORT |= _BV(LED_ORANGE);
+            //EXT_LED_PORT |= _BV(LED_ORANGE);
         }
         if (msg == 0) {
             FLAGS &= ~(AIRS_CLOSED);
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         //setup to receive again

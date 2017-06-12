@@ -52,14 +52,14 @@ class CAN(object):
 				cell_num = int(bytes[1],0)
 				for i in range(3):
 					volts = (int(bytes[(i+1)*2],0)<<8)|int(bytes[(i+1)*2+1],0)
-					cell = Cell(segment,cell_num,volts)#/10000.0)
+					cell = Cell(segment,cell_num,volts)/10000.0)
 					#cell.display()
 					if self.battery[segment][cell_num].cell is None:
 						self.battery[segment][cell_num] = cell
 					else:
 						self.battery[segment][cell_num].cell = cell_num
 						self.battery[segment][cell_num].segment = segment
-						self.battery[segment][cell_num].voltage = volts#/10000.0
+						self.battery[segment][cell_num].voltage = volts/10000.0
 					cell_num += 1
 			if (can_id == '0x14'): #temperature message
 				message = line.split("MSG:", 1)[1]
