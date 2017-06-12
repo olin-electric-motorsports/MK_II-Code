@@ -58,7 +58,7 @@ const uint8_t total_ic = TOTAL_IC; //number of BMS slaves on the daisy chain
 
 //Under Voltage and Over Voltage Thresholds
 const uint16_t OV_THRESHOLD = 35900; // Over voltage threshold ADC Code. LSB = 0.0001
-const uint16_t SOFT_OV_THRESHOLD = 35500; //Soft over-voltage for discharge
+const uint16_t SOFT_OV_THRESHOLD = 33500;//35500; //Soft over-voltage for discharge
 const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 0.0001
 
 //Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
@@ -152,7 +152,7 @@ int main (void)
     // Read LTC 6804 Config
     // uint8_t rx_cfg[total_ic][8];
 
-    PORTB |= _BV(PROG_LED_1);
+    //PORTB |= _BV(PROG_LED_1);
 
     //Initialize temp and voltage values
     //uint8_t tmp = read_all_voltages();
@@ -171,7 +171,7 @@ int main (void)
          */
         if (FLAGS & OPEN_SHDN) {
             PORTB &= ~_BV(PB2); //open relay
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
@@ -190,6 +190,12 @@ int main (void)
             PORTC |= _BV(PROG_LED_3);
         } else {
             PORTC &= ~_BV(PROG_LED_3);
+        }
+
+        if (FLAGS & AIRS_CLOSED){
+            EXT_LED_PORT |= _BV(LED_ORANGE);
+        } else {
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & READ_VALS) {
@@ -220,25 +226,25 @@ int main (void)
 
 ISR(CAN_INT_vect){
     // Check first MOb (AIR Control)
+    //cli();
     CANPAGE = (0 << MOBNB0);
-    if (bit_is_set(CANSTMOB, RXOK)) {
-        volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
-        msg = CANMSG;
-        //uint8_t test_msg[1] =  {msg};
-        //CAN_transmit(0, 0x18, 1, test_msg);  
+    
+    volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
+    msg = CANMSG;
+    //uint8_t test_msg[1] =  {msg};
+    //CAN_transmit(0, 0x18, 1, test_msg);  
 
-        if (msg) {
-            FLAGS |= AIRS_CLOSED;
-            //EXT_LED_PORT |= _BV(LED_ORANGE);
-        }
-        if (msg == 0) {
-            FLAGS &= ~(AIRS_CLOSED);
-            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
-        }
-
-        //setup to receive again
-        CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
+    if (msg == 0xFF) {
+        FLAGS |= AIRS_CLOSED;
+        //EXT_LED_PORT |= _BV(LED_ORANGE);
+    } else {
+        FLAGS &= ~(AIRS_CLOSED);
+        //EXT_LED_PORT &= ~_BV(LED_ORANGE);
     }
+
+    //setup to receive again
+    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
+    //sei();
 }
 
 ISR(PCINT0_vect)
@@ -335,15 +341,15 @@ void transmit_discharge_status(void)
 {
     //Declare message variable out here
     uint8_t msg[8] = {0,0,0,0,0,0,0,0};
-    for (uint8_t i = 0; i < TOTAL_IC%3; i++) {//Send two different messages
+    for (uint8_t i = 0; i < 2; i++) {//Send two different messages
         msg[0] = i; //
-        for (uint8_t k = 0; k < TOTAL_IC%2; k++) { //3 ICs per message
+        for (uint8_t k = 0; k < 3; k++) { //3 ICs per message
             uint16_t disch_status = discharge_status[(i*3) + k];
             msg[1+k*2] = (uint8_t)(disch_status >> 8); //High byte
             msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
 
-        CAN_transmit(3, 0x15+i, 7, msg);
+        CAN_transmit(3, 0x15+i, 8, msg);
         _delay_ms(5);
     }
 
@@ -388,12 +394,11 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
         
         for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
+            disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
             if (cell_codes[i][j] > OV_THRESHOLD) {
                 FLAGS |= OVER_VOLTAGE;
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
-                } else {
-                    disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
                 }
                 error += 1;
             } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
@@ -401,13 +406,9 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
                 
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
-                } else {
-                    disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
-                }
-
+                } 
             } else {
                 FLAGS &= ~(OVER_VOLTAGE | SOFT_OVER_VOLTAGE);
-                disable_discharge(i+1, j+1); //IC and Cell are 1-indexed
             }
             if (cell_codes[i][j] < UV_THRESHOLD) {
                 FLAGS |= UNDER_VOLTAGE;
