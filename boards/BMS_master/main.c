@@ -9,6 +9,7 @@
 
 // OEM defs
 volatile uint8_t FLAGS = 0x00;
+
 #define BSPD_CURRENT        0b00000001
 #define READ_VALS           0b00000010
 #define UNDER_VOLTAGE       0b00000100
@@ -43,12 +44,12 @@ volatile uint8_t FLAGS = 0x00;
 #define LED_GREEN PC5
 #define EXT_LED_PORT PORTC
 
-
+uint8_t can_recv_msg[2];
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
 const uint8_t ADC_CONVERSION_MODE = MD_7KHZ_3KHZ; // See ltc6811_daisy.h for Options
-const uint8_t ADC_DCP = DCP_ENABLED; // See ltc6811_daisy.h for Options
+const uint8_t ADC_DCP = DCP_DISABLED; // See ltc6811_daisy.h for Options
 const uint8_t CELL_CH_TO_CONVERT = CELL_CH_ALL; // See ltc6811_daisy.h for Options
 const uint8_t AUX_CH_TO_CONVERT = AUX_CH_ALL; // See ltc6811_daisy.h for Options
 const uint8_t STAT_CH_TO_CONVERT = STAT_CH_ALL; // See ltc6811_daisy.h for Options
@@ -58,8 +59,8 @@ const uint8_t total_ic = TOTAL_IC; //number of BMS slaves on the daisy chain
 
 //Under Voltage and Over Voltage Thresholds
 const uint16_t OV_THRESHOLD = 35900; // Over voltage threshold ADC Code. LSB = 0.0001
-const uint16_t SOFT_OV_THRESHOLD = 33500;//35500; //Soft over-voltage for discharge
-const uint16_t UV_THRESHOLD = 14100; // Under voltage threshold ADC Code. LSB = 0.0001
+const uint16_t SOFT_OV_THRESHOLD = 36200;//35500; //Soft over-voltage for discharge
+const uint16_t UV_THRESHOLD = 20000;//14100; // Under voltage threshold ADC Code. LSB = 0.0001
 
 //Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
 const uint16_t THERM_V_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
@@ -169,6 +170,7 @@ int main (void)
         /*
          * Open Shutdown Circuit: matches UNDER_VOLTAGE, OVER_VOLTAGE, OVER_TEMP
          */
+
         if (FLAGS & OPEN_SHDN) {
             PORTB &= ~_BV(PB2); //open relay
             //EXT_LED_PORT &= ~_BV(LED_ORANGE);
@@ -198,7 +200,17 @@ int main (void)
             EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
-        if (FLAGS & READ_VALS) {
+        if (can_recv_msg[1] == 0x99){
+            _delay_ms(5);
+            uint8_t flags_msg[1] = {FLAGS};
+            CAN_transmit(1,0x19,1,flags_msg);
+            _delay_ms(5);
+            CAN_transmit(1, 0x18, 2, can_recv_msg);
+            can_recv_msg[1] =  0x55; 
+            _delay_ms(5);
+        }
+
+        if (FLAGS & READ_VALS) { 
             EXT_LED_PORT ^= _BV(LED_GREEN);
             uint8_t error = 0;
             error += read_all_voltages();
@@ -212,9 +224,9 @@ int main (void)
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
-
+            
             FLAGS &= ~READ_VALS;
-
+            CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
         }
 
         wdt_reset();
@@ -231,8 +243,9 @@ ISR(CAN_INT_vect){
     
     volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
     msg = CANMSG;
-    //uint8_t test_msg[1] =  {msg};
-    //CAN_transmit(0, 0x18, 1, test_msg);  
+    can_recv_msg[0] =  msg; 
+    can_recv_msg[1] =  0x99; 
+    
 
     if (msg == 0xFF) {
         FLAGS |= AIRS_CLOSED;
@@ -332,7 +345,7 @@ void transmit_temperatures(void)
 }
 
 /*!<
-  Cell Voltages will be transmitted in this CAN message, LSB = 0.0001:
+  Cell Discharge Status will be transmitted in this CAN message, LSB 
   |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[5] |            msg[6] |
   |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
   |IC group (0 or 1) |IC1 Status High   |IC1 Status Low    |IC2 Status High   |    .....     |msg Cell 3 High    |IC 3 Status Low    |
@@ -340,7 +353,7 @@ void transmit_temperatures(void)
 void transmit_discharge_status(void)
 {
     //Declare message variable out here
-    uint8_t msg[8] = {0,0,0,0,0,0,0,0};
+    uint8_t msg[7] = {0,0,0,0,0,0,0};
     for (uint8_t i = 0; i < 2; i++) {//Send two different messages
         msg[0] = i; //
         for (uint8_t k = 0; k < 3; k++) { //3 ICs per message
@@ -349,7 +362,7 @@ void transmit_discharge_status(void)
             msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
 
-        CAN_transmit(3, 0x15+i, 8, msg);
+        CAN_transmit(3, 0x15, 7, msg);
         _delay_ms(5);
     }
 
@@ -397,10 +410,10 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
             disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
             if (cell_codes[i][j] > OV_THRESHOLD) {
                 FLAGS |= OVER_VOLTAGE;
+                error += 1;
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
                 }
-                error += 1;
             } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
                 

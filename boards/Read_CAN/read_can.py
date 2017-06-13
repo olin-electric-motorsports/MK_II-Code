@@ -42,7 +42,7 @@ class CAN(object):
             #string = " ".join(str(x) for x in v_list)
             #print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
             if ((time.time() - self.message_dict[key].time) < 10):
-                print self.message_dict[key].line
+                print self.message_dict[key].line[:-2] + "Time:" + str(self.message_dict[key].time)
 
         print "-----------------------------"
 

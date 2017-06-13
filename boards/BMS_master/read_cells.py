@@ -10,6 +10,7 @@ class Cell(object):
 		self.temp = 0
 		self.temp_voltage = 0
 		self.vref2 = 0
+		self.discharge = 0
 
 	def display(self):
 		print "Seg: " + str(self.segment) + " Cell: " + str(self.cell) + " V: " + str(self.voltage) + " T: " + str(self.temp)
@@ -23,7 +24,7 @@ class Cell(object):
 	    R = voltage * R_top/(self.vref2 - voltage)
 	    if R < 0: #can't take the log of a negative number
 	    	R = 0.0001
-	    print "Vref2: " + str(self.vref2) + " V: "+str(voltage)+" R: "+str(R)
+	    #print "Vref2: " + str(self.vref2) + " V: "+str(voltage)+" R: "+str(R)
 	    temp = beta / (math.log(R) - math.log(R_0) + (beta / T_0)) - 273	
 	    return temp
 
@@ -61,6 +62,7 @@ class CAN(object):
 						self.battery[segment][cell_num].segment = segment
 						self.battery[segment][cell_num].voltage = volts/10000.0
 					cell_num += 1
+
 			if (can_id == '0x14'): #temperature message
 				message = line.split("MSG:", 1)[1]
 				bytes = message.split(",")[:8]
@@ -78,12 +80,27 @@ class CAN(object):
 						cell.temp = cell.voltage_to_temp(temp_volt)
 					cell_num += 1
 
+			if (can_id == '0x15'):
+				message = line.split("MSG:", 1)[1]
+				bytes = message.split(",")[:8]
+				section = int(bytes[0],0)
+				segment = section * 3
+				for i in range(3):
+					discharge = (int(bytes[i*2 + 1],0)<<8)|int(bytes[i*2 + 2],0)
+					for cell_num in range(12):
+						if not self.battery[segment][cell_num].cell is None:
+							cell = self.battery[segment][cell_num]
+							cell.discharge = 1 if ((discharge >> cell_num) & 1) else 0 #'Yes' if fruit == 'Apple' else 'No'
+					segment += 1
+
+
+
 
 
 	def display(self):
 		for segment in self.battery:
 			#bar = [SOME EXPRESSION for item in some_iterable]
-			v_list =  [("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
+			v_list =  [("D* " if cell.discharge else "")+("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
 			print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
 		print "-----------------------------"
