@@ -15,8 +15,9 @@ volatile uint8_t FLAGS = 0x00;
 #define OVER_VOLTAGE        0b00001000
 #define SOFT_OVER_VOLTAGE   0b00010000
 #define OVER_TEMP           0b00100000
-#define OPEN_SHDN           0b00101100
-#define AIRS_CLOSED         0b01000000
+#define OPEN_WIRE           0b01000000
+#define OPEN_SHDN           0b01101100
+#define AIRS_CLOSED         0b10000000
 
 #define PROG_LED_1 PB5
 #define PROG_LED_2 PB6
@@ -116,6 +117,9 @@ uint16_t discharge_status[TOTAL_IC];
 uint8_t tx_cfg[TOTAL_IC][8];
 uint8_t rx_cfg[TOTAL_IC][8];
 
+/* This is gonna use a ton of memory but it's what the old one does. We can change it */
+long open_wires[TOTAL_IC];
+
 int main (void)
 {
     sei(); //allow interrupts
@@ -167,6 +171,8 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
+    //Run an open wire test every 10 times we do a cell voltage calc.
+    uint8_t open_wire_counter = 0;
 
     while(1) {
 
@@ -181,7 +187,7 @@ int main (void)
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1); 
+            PORTB |= _BV(PROG_LED_1);
         } else {
           PORTB &= ~_BV(PROG_LED_1);
         }
@@ -209,6 +215,14 @@ int main (void)
             o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             transmit_temperatures();
             transmit_discharge_status();
+
+            //run open wire test every 10 cycles
+            if (open_wire_counter > 9) {
+              run_openwire(open_wires);
+              open_wire_counter = 0;
+            } else {
+              open_wire_counter++;
+            }
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
@@ -1124,6 +1138,116 @@ void o_ltc6811_rdaux_reg(uint8_t reg, //Determines which GPIO voltage register i
   spi_write_read(cmd,4,data,(REG_LEN*total_ic));
   PORTB |= _BV(PB4); //set CS high
 
+}
+
+// Start an open wire Conversion
+void o_ltc6811_adow(
+  uint8_t MD, //ADC Mode
+  uint8_t PUP //Pull up or down
+)
+{
+
+  uint8_t cmd[4];
+  uint16_t cmd_pec;
+  uint8_t md_bits;
+
+  md_bits = (MD & 0x02) >> 1;
+  cmd[0] = md_bits + 0x02;
+  md_bits = (MD & 0x01) << 7;
+  cmd[1] =  md_bits + 0x28 + (PUP<<6) ;//+ CH;
+
+  cmd_pec = pec15_calc(2, cmd);
+  cmd[2] = (uint8_t)(cmd_pec >> 8);
+  cmd[3] = (uint8_t)(cmd_pec);
+
+ // wakeup_idle (); //This will guarantee that the ltc6811 isoSPI port is awake. This command can be removed.
+  PORTB &= ~_BV(PB4);
+  spi_write_array(4,cmd);
+  PORTB |= _BV(PB4);
+
+}
+
+/*
+ * Follows open-wire testing protocol in LTC6804 datasheet
+ */
+void run_openwire(long *open_wire_result)
+{
+  uint16_t OPENWIRE_THRESHOLD = 4000;
+  const uint8_t  N_CHANNELS = CELL_CHANNELS;
+
+  uint16_t pullUp_cell_codes[TOTAL_IC][N_CHANNELS];
+  uint16_t pullDwn_cell_codes[TOTAL_IC][N_CHANNELS];
+  uint16_t openWire_delta[TOTAL_IC][N_CHANNELS];
+  int8_t error;
+
+  wakeup_sleep(TOTAL_IC);
+  o_ltc6811_adow(MD_7KHZ_3KHZ,PULL_UP_CURRENT);
+  o_ltc6811_pollAdc();
+  wakeup_idle(TOTAL_IC);
+  o_ltc6811_adow(MD_7KHZ_3KHZ,PULL_UP_CURRENT);
+  o_ltc6811_pollAdc();
+  wakeup_idle(TOTAL_IC);
+  error = o_ltc6811_rdcv(0, TOTAL_IC,pullUp_cell_codes); // Set to read back all cell voltage registers
+
+  wakeup_idle(TOTAL_IC);
+  o_ltc6811_adow(MD_7KHZ_3KHZ,PULL_DOWN_CURRENT);
+  o_ltc6811_pollAdc();
+  wakeup_idle(TOTAL_IC);
+  o_ltc6811_adow(MD_7KHZ_3KHZ,PULL_DOWN_CURRENT);
+  o_ltc6811_pollAdc();
+  wakeup_idle(TOTAL_IC);
+  error = o_ltc6811_rdcv(0, TOTAL_IC,pullDwn_cell_codes); // Set to read back all cell voltage registers
+
+
+  for (int ic=0; ic<TOTAL_IC; ic++)
+  {
+    open_wire_result[ic] =0;
+    for (int cell=0; cell<N_CHANNELS; cell++)
+    {
+      if (pullDwn_cell_codes[ic][cell]>pullUp_cell_codes[ic][cell])
+      {
+        openWire_delta[ic][cell] = pullDwn_cell_codes[ic][cell] - pullUp_cell_codes[ic][cell]  ;
+      }
+      else
+      {
+        openWire_delta[ic][cell] = 0;
+      }
+      //Serial.println(openWire_delta[ic][cell],DEC);
+    }
+  }
+  uint8_t openwires = 0;
+  for (int ic=0; ic<TOTAL_IC; ic++)
+  {
+    for (int cell=1; cell<N_CHANNELS; cell++)
+    {
+
+      if (openWire_delta[ic][cell]>OPENWIRE_THRESHOLD)
+      {
+        open_wire_result[ic] += (1<<cell);
+        openwires ++;
+      }
+      /*
+      Serial.println();
+      Serial.println(pullUp_cell_codes[0][cell],DEC);
+      Serial.println(pullDwn_cell_codes[0][cell],DEC);
+      */
+    }
+    if (pullUp_cell_codes[ic][0] == 0)
+    {
+      open_wire_result[ic] += 1;
+    }
+    if (pullUp_cell_codes[ic][N_CHANNELS-1] == 0)
+    {
+      open_wire_result[ic] += (1<<(N_CHANNELS));
+    }
+  }
+
+  //set FLAGS if there are open wires
+  if (openwires) {
+    FLAGS |= OPEN_WIRE;
+  } else {
+    FLAGS &+= ~(OPEN_WIRE);
+  }
 }
 
 /*

@@ -63,6 +63,12 @@ void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
                    uint8_t config[][6] //A two dimensional array of the configuration data that will be written
                   );
 
+// Start an open wire Conversion
+void o_ltc6811_adow(
+uint8_t MD, //ADC Mode
+uint8_t PUP //Pull up or down
+);
+void run_openwire(long *open_wire_result);
 uint16_t pec15_calc(uint8_t len, //Number of bytes that will be used to calculate a PEC
                 uint8_t *data //Array of data that will be used to calculate  a PEC
             );
