@@ -58,9 +58,9 @@ const uint8_t total_ic = TOTAL_IC; //number of BMS slaves on the daisy chain
 
 
 //Under Voltage and Over Voltage Thresholds
-const uint16_t OV_THRESHOLD = 35900; // Over voltage threshold ADC Code. LSB = 0.0001
+const uint16_t OV_THRESHOLD = 36000;//35900; // Over voltage threshold ADC Code. LSB = 0.0001
 const uint16_t SOFT_OV_THRESHOLD = 36200;//35500; //Soft over-voltage for discharge
-const uint16_t UV_THRESHOLD = 20000;//14100; // Under voltage threshold ADC Code. LSB = 0.0001
+const uint16_t UV_THRESHOLD = 22000; //20000;// Under voltage threshold ADC Code. LSB = 0.0001
 
 //Thermistor voltage times this number must be greater than measured bus voltage (times 1000 for AVR)
 const uint16_t THERM_V_FRACTION = 3807; //Maximum fraction is 99/26 = 3.807 (1% top thermistors, therm 26K at 58 C)
@@ -136,7 +136,7 @@ int main (void)
     init_read_timer();
 
     //PWM init
-    init_fan_pwm(0x10);
+    init_fan_pwm(0x80);
 
     //Watchdog init
     wdt_enable(WDTO_8S);
@@ -411,18 +411,16 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
             if (cell_codes[i][j] > OV_THRESHOLD) {
                 FLAGS |= OVER_VOLTAGE;
                 error += 1;
-                if (FLAGS & AIRS_CLOSED){
-                    enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
-                }
-            } else if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
+            }
+
+            if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
                 
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
                 } 
-            } else {
-                FLAGS &= ~(OVER_VOLTAGE | SOFT_OVER_VOLTAGE);
-            }
+            } 
+
             if (cell_codes[i][j] < UV_THRESHOLD) {
                 FLAGS |= UNDER_VOLTAGE;
                 error += 1;

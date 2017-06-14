@@ -21,7 +21,10 @@ class Cell(object):
 	    R_top = 100000.0
 	    T_0 = 273 + 25
 	    #R = (self.vref2 * R_top / voltage) - R_top
-	    R = voltage * R_top/(self.vref2 - voltage)
+	    try: 
+	    	R = voltage * R_top/(self.vref2 - voltage)
+	    except:
+	    	return 0.0
 	    if R < 0: #can't take the log of a negative number
 	    	R = 0.0001
 	    #print "Vref2: " + str(self.vref2) + " V: "+str(voltage)+" R: "+str(R)
@@ -102,7 +105,7 @@ class CAN(object):
 			#bar = [SOME EXPRESSION for item in some_iterable]
 			v_list =  [("D* " if cell.discharge else "")+("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
 			string = " ".join(str(x) for x in v_list)
-			print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
+			print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 | " + string
 		print "-----------------------------"
 
 
