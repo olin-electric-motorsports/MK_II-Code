@@ -45,6 +45,7 @@ volatile uint8_t FLAGS = 0x00;
 #define EXT_LED_PORT PORTC
 
 uint8_t can_recv_msg[2];
+uint8_t timer_counter;
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
@@ -278,7 +279,11 @@ ISR(PCINT0_vect)
 
 ISR(TIMER0_COMPA_vect)
 {
-    FLAGS |= READ_VALS;
+    if (timer_counter >= 50) {
+        FLAGS |= READ_VALS;
+        timer_counter = 0;
+    }
+    timer_counter ++;
 }
 
 
