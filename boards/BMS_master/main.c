@@ -276,7 +276,7 @@ ISR(PCINT0_vect)
 //     FLAGS |= READ_VALS;
 // }
 
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER0_COMPA_vect)
 {
     FLAGS |= READ_VALS;
 }
@@ -371,11 +371,13 @@ void transmit_discharge_status(void)
 //READ VALUES TIMER/////////////////////////////////////////////////////////////
 
 void init_read_timer(void) {
-    TCCR1A &= ~(_BV(WGM11) | _BV(WGM10)); //set timer in CTC mode with reset on match with OCR1A
-    TCCR1B &= ~(_BV(CS10) | _BV(CS11));
-    TCCR1B |= _BV(CS12)  | _BV(WGM12); //Set prescaler to 1/256
-    TIMSK1 |= _BV(OCIE1A); // Enable overflow interrupts (set TOIE)
-    OCR1A |= 65000; //timer compare value
+    TCCR0A &= ~(_BV(WGM11) | _BV(WGM10)); //set timer in CTC mode with reset on match with OCR1A
+    TCCR0B &= ~(_BV(CS11));
+    TCCR0B |= _BV(CS10);
+    TCCR0B |= _BV(CS12)  | _BV(WGM12); //Set prescaler to 1/1024
+
+    TIMSK0 |= _BV(OCIE0A); // Enable CTC compare match
+    OCR0A |= 0xFF; //timer compare value
 }
 
 
@@ -384,9 +386,10 @@ void init_read_timer(void) {
 void init_fan_pwm(uint8_t duty_cycle)
 {
     //Output compare pin is OC1B, so we need OCR1B as our counter
-    TCCR0B |= _BV(CS00); //Clock prescale set to max speed
-    TCCR0A |= _BV(COM1B1) | _BV(WGM00); //Enable the right pwm compare and mode
-    TCCR0A &= ~_BV(COM0B1); //Make sure other PWM is off
+    TCCR1B |= _BV(CS00); //Clock prescale set to max speed
+    TCCR1B |= _BV(WGM12);
+    TCCR1A |= _BV(COM1B1) | _BV(WGM10); // Fast PWM 8-bit mode
+    TCCR1A &= ~_BV(COM1B0); // Set on match, clear on top
     DDRC |= _BV(PC1); //Enable
 
     OCR1B = (uint8_t) duty_cycle;
