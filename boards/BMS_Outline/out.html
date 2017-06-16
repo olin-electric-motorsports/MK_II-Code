@@ -1,0 +1,155 @@
+<h1 id="general-bms-outline">General BMS Outline</h1>
+<p>There are a number of different elements that go into BMS firmware design. The key components are being able to check voltages and temperatures at a regular interval, as well as ensuring 100% uptime.</p>
+<h2 id="sampling">Sampling</h2>
+<p>The voltage and temperature sampling for the BMS master is going to utilize the code from the LT-whatever chip. In theory it should be as simple as setting up SPI to run through a set of pre-computed bytes, and then storing the received data.</p>
+<p>(Note that we could calculate the bytes we need to send on the MCU, in which case the code below would have a slight modification)</p>
+<p>For example,</p>
+<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"><span class="co">// The SPI codes to send for reading voltages</span>
+<span class="pp">#DEFINE SPI_VOLT_SENSE_COUNT 4</span>
+<span class="dt">uint8_t</span> voltage_sense_SPI_codes[] = { <span class="bn">0x55</span>, <span class="bn">0x56</span>, <span class="bn">0x57</span>, <span class="bn">0x58</span> };
+
+<span class="co">// The SPI codes to send for reading temperature</span>
+<span class="pp">#DEFINE SPI_TEMP_SENSE_COUNT 4</span>
+<span class="dt">uint8_t</span> temperature_sense_SPI_codes[] = { <span class="bn">0x65</span>, <span class="bn">0x66</span>, <span class="bn">0x67</span>, <span class="bn">0x68</span> };
+
+<span class="co">// Our data collection</span>
+<span class="dt">uint8_t</span> voltages[SPI_VOLT_SENSE_COUNT];
+<span class="dt">uint8_t</span> temperatures[SPI_TEMP_SENSE_COUNT];
+
+<span class="co">// Function call for reading voltages</span>
+<span class="dt">uint8_t</span> sample_all_voltages(<span class="dt">void</span>)
+{
+    <span class="cf">for</span> (<span class="dt">uint8_t</span> i = <span class="dv">0</span>; i &lt; SPI_VOLT_SENSE_COUNT; i++)
+    {
+        <span class="co">// Start transmission</span>
+        SPIDR = voltage_sense_SPI_codes[i];
+
+        <span class="co">// Wait for received bits</span>
+        <span class="cf">while</span>( bit_is_clear(SPSR, SPIF) ) <span class="cf">continue</span>;
+
+        <span class="co">// Read the SPI data</span>
+        <span class="dt">volatile</span> <span class="dt">uint8_t</span> data = SPIDR;
+
+        <span class="co">// Possibly do data checking here</span>
+        <span class="cf">if</span> ( !data_valid_volt(data) )
+        {
+            <span class="co">// Return error</span>
+            <span class="cf">return</span> <span class="dv">1</span>;
+        }
+
+        <span class="co">// Store the data</span>
+        voltages[i] = data;
+    }
+
+    <span class="co">// No error</span>
+    <span class="cf">return</span> <span class="dv">0</span>;
+}
+
+
+<span class="co">// Function call for reading temperatures</span>
+<span class="dt">uint8_t</span> sample_all_temperatures(<span class="dt">void</span>)
+{
+    <span class="cf">for</span> (<span class="dt">uint8_t</span> i = <span class="dv">0</span>; i &lt; SPI_TEMP_SENSE_COUNT; i++)
+    {
+        <span class="co">// Start transmission</span>
+        SPIDR = temperature_sense_SPI_codes[i];
+
+        <span class="co">// Wait for received bits</span>
+        <span class="cf">while</span>( bit_is_clear(SPSR, SPIF) ) <span class="cf">continue</span>;
+
+        <span class="co">// Read the SPI data</span>
+        <span class="dt">volatile</span> <span class="dt">uint8_t</span> data = SPIDR;
+
+        <span class="co">// Possibly do data checking here</span>
+        <span class="cf">if</span> ( !data_valid_temp(data) )
+        {
+            <span class="co">// Return error</span>
+            <span class="cf">return</span> <span class="dv">1</span>;
+        }
+
+        <span class="co">// Store the data</span>
+        temperatures[i] = data;
+    }
+
+    <span class="co">// No error</span>
+    <span class="cf">return</span> <span class="dv">0</span>;
+}</code></pre></div>
+<h2 id="timing">Timing</h2>
+<p>The (slightly) trickier part is going to be setting up the timing so that the voltages and temperatures are ready at a regular interval. For this, you will need to use one of the timers (8-bit or 16-bit) and have it interrupt on overflow, or at a comparison match.</p>
+<p>In order to keep our processing in the interrupt at a minimum, we can simply set a flag.</p>
+<p>For instance,</p>
+<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"><span class="dt">uint8_t</span> flags = <span class="dv">0</span>;
+<span class="pp">#DEFINE READ_VALS 1</span>
+
+<span class="dt">void</span> setup_timer(<span class="dt">void</span>)
+{
+    <span class="co">// Initialize 8-bit or 16-bit timer</span>
+    <span class="co">// Either in OVF or Comparision mode; doesn&#39;t really matter</span>
+}
+
+ISR (TIMER0_OVF_vect) <span class="co">// or any of the other timer interrupt vectors</span>
+{
+    flags |= _BV(READ_VALS);
+}
+
+<span class="dt">uint8_t</span> read_all_vals(<span class="dt">void</span>)
+{
+    <span class="dt">uint8_t</span> err = <span class="dv">0</span>;
+    err = sample_all_voltages();
+    <span class="cf">if</span> (err)
+    {
+        <span class="co">// propagate error</span>
+        <span class="cf">return</span> err;
+    }
+
+    err = sample_all_temperatures();
+    <span class="cf">if</span> (err)
+    {
+        <span class="cf">return</span> err;
+    }
+
+    <span class="co">// </span><span class="al">TODO</span><span class="co">: Send CAN data (?)</span>
+
+    <span class="cf">return</span>;
+}
+
+<span class="dt">int</span> main(<span class="dt">void</span>)
+{ 
+    <span class="co">// Initialize stuff here...</span>
+
+    <span class="co">// Our favorite infinite loop</span>
+    <span class="dt">uint8_t</span> err = <span class="dv">0</span>;
+    <span class="cf">while</span>(<span class="dv">1</span>)
+    {
+        <span class="cf">if</span> (bit_is_set(flags, READ_VALS))
+        {
+            err = read_all_vals();
+            <span class="cf">if</span> (err)
+            {
+                <span class="co">// Handle the error in some way</span>
+            }
+        }
+    }
+}</code></pre></div>
+<h2 id="can">CAN</h2>
+<p>CAN for the BMS is no different than for any other board. There may need to be additional processing on the data (say averaging it) so that we can send the minimal amount of necessary information.</p>
+<p>When averaging data or working with data, keep the data as integers and NEVER start using floats. It may sound like a good idea to do:</p>
+<div class="sourceCode"><pre class="sourceCode c"><code class="sourceCode c"><span class="dt">int</span> total = <span class="dv">0</span>;
+<span class="cf">for</span> (<span class="dt">uint8_t</span> i = <span class="dv">0</span>; i &lt; LEN_OF_DATA; i++)
+{
+    total += data[i];
+}
+
+<span class="dt">float</span> avg = ((<span class="dt">float</span>) total) / ((<span class="dt">float</span>) LEN_OF_DATA);</code></pre></div>
+<p>But this will be absolutely detrimental for the AVR performance. Float arithmetic is wildly expensive.</p>
+<p>Arithmetic processes that are incredibly fast on an AVR are division by a multiple of 2, multiplication by a multiple of 2, and any bit-arithmetic. Stick with those for processing data. When in doubt, just simply don't process the data. (Do we really need the average, or can we get away with just sending one of the voltages and ensuring the rest are at least in a safe range? Or maybe send the highest value.)</p>
+<h2 id="watchdog">Watchdog</h2>
+<p>Since the BMS code must have 100% uptime, getting stuck in an infinite loop or have other bad behavior would be detrimental. Thankfully, there are systems in place to handle this type of issue.</p>
+<p>The one we will use is a watchdog. The general idea behind a watchdog is that you have to &quot;kick&quot; the dog at a regular interval or else it will &quot;kill&quot; you. Usually they are a separate chip from the MCU that you have to pulse at a regular interval or else it will pull the reset pin low (therefore reseting the chip).</p>
+<p>For us, the ATmega16m1 has a watchdog built in. Information about how to use it is in section 11.8 of the datasheet. There are a few quirks to the watchdog timer, one being that if it is ever turned on it will remain on unless you actively turn it off (which can be a massive pain).</p>
+<h2 id="sleep">Sleep</h2>
+<p>The last part of the BMS functionality will be going to sleep when not in use. To actually put the AVR to sleep is fairly straightforward, and there are a number of additional macros Atmel provides for doing so. The tricky part will be keeping the Watchdog happy while going to sleep for as long as possible.</p>
+<h2 id="putting-it-all-together">Putting it all together</h2>
+<p>Thankfully none of the above code is very tricky. In terms of architecture, it is not a good idea to do a lot of processing within an interrupt, and so make heavy usage of flags while doing interrupt based code.</p>
+<p>Additionally, ensure that errors are handled properly. Generally you should propagate the error until it is at a part of the code where it is easy to verify the error handling. Honestly, it might be a good idea to have only one section of the code actually handle the errors and everywhere else just propagates them down. This way the code can be more easily verified for correctness.</p>
+<p>A good rule of thumb is to keep one function for doing one thing, and to never nest code more than 3 levels deep.If a function gets too long, consider breaking it into smaller functions.</p>
