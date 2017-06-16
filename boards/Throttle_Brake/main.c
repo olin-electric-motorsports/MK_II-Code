@@ -12,13 +12,13 @@
 
 // BSPD BSO is pin 28, which is ADC4 which is MUX 00100 = 0x04
 
-uint8_t FLAG = 0x00;
 uint8_t startUpConditions = 0b00000000; // bit 0 is shudown circuit, bit 1 is button, bit 2 is brake
 
-uint8_t throttleMin;  // our min throttle value, found by experimentation
-uint8_t throttleMax;  // our max throttle value, found by experimentation
-uint8_t legalDeviation;  // 10% of the throttle range
+uint16_t throttleMin[] = {645,436};  // our min digital throttle values, found by experimentation
+uint16_t throttleMax[];  = {832,576};  // our max digital throttle values, found by experimentation
+uint16_t throttleRange[] = {throttleMax[0] - throttleMin[0], throttleMax[1] - throttleMin[1]} // throttle digital range
 
+uint16_t throttleTravel[] = {0x00,0x00}; // perecent travel for throttle
 
 
 ISR(PCINT2_vect){
@@ -43,11 +43,15 @@ ISR(PCINT2_vect){
   if((CANIDT1 == (uint8_t)CAN_IDT_AIR_CONTROL>>3) && (CANIDT2 == (uint8_t)CAN_IDT_AIR_CONTROL<<5))
   {
     /**** Checks if Shutdown Circuit is Closed ****/
-    if(recievedMSG[1]==0b00000001)
+    if(recievedMSG[1]==0xFF)
     {
       startUpConditions |= 0b00000001;  // changes bit 0 to 1
     }
+    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, )
   }
+
+
+
 }
 
 uint8_t brakePlausibility(uint16_t rThrottle[], uint16_t rBrake)
@@ -60,13 +64,23 @@ uint8_t brakePlausibility(uint16_t rThrottle[], uint16_t rBrake)
 }
 
 
-uint8_t throttleComparison(uint16_t rThrottle[])
+uint8_t throttleComparison(uint16_t throttleTravel[])
 {
   //These two if statements check if the two throttle values are within the 10% legal deviation of each other
-  if((rThrottle[0] > rThrottle[1] + legalDeviation) || (rThrottle[1] > rThrottle[0] + legalDeviation) || rThrottle[0] < throttleMin || rThrottle[0] > throttleMax || rThrottle[1] < throttleMin || rThrottle[1] > throttleMax)
-  {
-    return 1;  // if not in legal deveiation
+  if(throttleTravel[0] > throttleTravel[1]){
+      if(throttleTravel[0]-throttleTravel[1] > 10)
+      {
+            return 1;  // if not in legal deveiation
+      }
   }
+  else
+  {
+      if(throttleTravel[1]-throttelTravel[0] > 10)
+      {
+            return 1;  // if not in legal deveiation
+      }
+  }
+
   // If two throttle values were in the legal deviation the original msg is returned
   return 0;
 
@@ -149,6 +163,7 @@ int main (void) {
       //wait for ADC reading
       while(bit_is_set(ADCSRA,ADSC));
       rThrottle[i] = ADC;
+      throttleTravel = (ADC - throttleMin[i])/throttleRange[i];  // gets percent pedal travel
     }
 
     /***** Reads and stores data from ADC for brake *****/
@@ -180,10 +195,11 @@ int main (void) {
       /**** Checks if all startup conditions are met ****/
       if(startUpConditions == 0b00000111)
       {
+        canCounter = 100;
         state = 1;  // switches states
         msg[4] = 1;  // Says startup sequence is starting
       }
-      state = 1; // CHANGE LATER DO NOT KEEP THIS LINE
+      //state = 1; // CHANGE LATER DO NOT KEEP THIS LINE
     }//end of state 0
 
     /********************* Startup State *************************/
