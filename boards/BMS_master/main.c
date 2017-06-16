@@ -23,6 +23,21 @@ volatile uint8_t FLAGS = 0x00;
 #define PROG_LED_2 PB6
 #define PROG_LED_3 PC0
 
+//Shutdown sensing defs
+#define RS        PD7
+#define TAC       PD6
+#define PIN_RS    PIND
+#define PIN_TAC   PIND
+#define CAN_IDX_RS   6
+#define CAN_IDX_TAC  7
+
+//CAN defs:
+#define AIR_RECEIVE_MOb 0
+#define VOLTAGE_BROADCAST_MOb 1
+#define TEMP_BROADCAST_MOb 2
+#define DISC_BROADCAST_MOb 3
+#define GEN_BROADCAST_MOb 4
+
 // MUX defs
 #define MUX_CHANNELS 6
 #define MUX1_ADDRESS 0x49
@@ -44,13 +59,6 @@ volatile uint8_t FLAGS = 0x00;
 #define LED_GREEN PC5
 #define EXT_LED_PORT PORTC
 
-//Shutdown sensing defs
-#define RS        PD7
-#define TAC       PD6
-#define PIN_RS    PIND
-#define PIN_TAC   PIND
-#define CAN_IDX_RS   6
-#define CAN_IDX_TAC  7
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
@@ -176,6 +184,8 @@ int main (void)
     //uint8_t tmp = read_all_voltages();
     //tmp += read_all_temperatures();
 
+    //TODO: Remove this? @wrench
+
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
@@ -238,7 +248,7 @@ int main (void)
             FLAGS &= ~READ_VALS;
 
             read_all_pins();
-            CAN_transmit(3, 0x0C, 8, gCAN_MSG);
+            CAN_transmit(GEN_BROADCAST_MOb, CAN_IDT_BMS, 8, gCAN_MSG);
 
         }
 
@@ -259,7 +269,7 @@ ISR(CAN_INT_vect){
       FLAGS &= ~(AIRS_CLOSED);
     }
     PORTB ^= _BV(PB6);
-    CAN_Rx(0, IDT_AIR_CONTROL, IDT_AIR_CONTROL_L, IDM_single); //setup to receive again
+    CAN_Rx(AIR_RECEIVE_MOb, IDT_AIR_CONTROL, IDT_AIR_CONTROL_L, IDM_single); //setup to receive again
 }
 
 ISR(PCINT0_vect)
@@ -332,7 +342,7 @@ void transmit_voltages(void)
                 msg[3+k*2] = (uint8_t)cell_voltage;  //Low byte
             }
 
-            CAN_transmit(1, 0x13, 8, msg);
+            CAN_transmit(VOLTAGE_BROADCAST_MOb, 0x13, 8, msg);
             _delay_ms(5);
         }
     }
@@ -365,7 +375,7 @@ void transmit_temperatures(void)
             msg[6] = (uint8_t)(vref2 >> 8); //vref2 High byte
             msg[7] = (uint8_t)(vref2); //vref2 Low byte
 
-            CAN_transmit(2, 0x14, 8, msg);
+            CAN_transmit(TEMP_BROADCAST_MOb, 0x14, 8, msg);
             _delay_ms(5);
         }
     }
@@ -389,7 +399,7 @@ void transmit_discharge_status(void)
             msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
 
-        CAN_transmit(3, 0x15, 7, msg);
+        CAN_transmit(DISC_BROADCAST_MOb, 0x15, 7, msg);
         _delay_ms(5);
     }
 
