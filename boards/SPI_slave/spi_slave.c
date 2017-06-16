@@ -21,7 +21,7 @@ uint8_t spi_message(uint8_t msg)
     SPDR = msg;
 
     // Wait for transmission to finish
-    while(!(SPSR & (1<<SPIF))); 
+    while(!(SPSR & (1<<SPIF)));
 
     return SPDR;
 }
