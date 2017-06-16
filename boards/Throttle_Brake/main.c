@@ -37,6 +37,7 @@ ISR(PCINT2_vect){
     {
       startUpConditions &= 0b11111101;  // changes bit 1 to 0
     }
+        CAN_wait_on_receive(0, CAN_IDT_DASHBOARD, CAN_IDT_DASHBOARD_L, CAN_IDM_single);
   }//end Dashboard if
 
   /*** If the message is from AIRControl ***/
@@ -47,7 +48,7 @@ ISR(PCINT2_vect){
     {
       startUpConditions |= 0b00000001;  // changes bit 0 to 1
     }
-    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, )
+    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
   }
 
 
@@ -86,11 +87,6 @@ uint8_t throttleComparison(uint16_t throttleTravel[])
 
 }
 
-uint8_t setinverterMSG(uint16_t rThrottle[])
-{
-  return 0;
-}
-
 int main (void) {
   uint16_t canCounter = 0;
   uint8_t ledCounter = 0;
@@ -101,6 +97,8 @@ int main (void) {
   /* Brake and Throttle states */
   uint16_t rBrake = 0x00;
   uint16_t rThrottle[] = {0x00,0x00};
+
+  uint16_t torque = 0x00;
 
   sei();
   // set up for throttle
@@ -147,6 +145,9 @@ int main (void) {
   // brake light
   PCICR |= _BV(PCIE2);//in 2nd mask register
   PCMSK2 |= _BV(PCINT21); //enable interups for pin 21 the brake mosfet
+
+  CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_global);
+  CAN_wait_on_receive(0, CAN_IDT_DASHBOARD, CAN_IDT_DASHBOARD_L, CAN_IDM_global);
 
   while(1)
   {
@@ -218,13 +219,15 @@ int main (void) {
     /******************** Post-Startup State *********************/
     else if(state==2)
     {
-        if(throttleComparison(rThrottle)==1)
+        if(throttleComparison(throttleTravel)==1)
         {
-          //inverterMSG[5] &= 0b11111110;
+          inverterMSG[5] &= 0b11111110;
         }
         else
         {
-          // send torque command to inverter
+          torque = throttleTravel[0]*(65536/100);
+          inverterMSG[0] = (uint8_t)(torque >> 8);  // sets torque command
+          inverterMSG[1] = (uint8_t)(torque);
         }
     }//end of state 2
 
@@ -245,8 +248,8 @@ int main (void) {
     msg[2] = (uint8_t)(rThrottle[1] >> 8);
     msg[3] = (uint8_t) rThrottle[1];
 
-    inverterMSG[0] = 0x05;
-    inverterMSG[1] = 0xBC;
+    inverterMSG[0] = 0x01;
+    inverterMSG[1] = 0x01;
 
     if(canCounter == 100)
     {
