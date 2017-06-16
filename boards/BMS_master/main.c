@@ -44,7 +44,13 @@ volatile uint8_t FLAGS = 0x00;
 #define LED_GREEN PC5
 #define EXT_LED_PORT PORTC
 
-
+//Shutdown sensing defs
+#define RS        PD7
+#define TAC       PD6
+#define PIN_RS    PIND
+#define PIN_TAC   PIND
+#define CAN_IDX_RS   6
+#define CAN_IDX_TAC  7
 
 //ADC Command Configurations
 const uint8_t ADC_OPT = ADC_OPT_DISABLED; // See ltc6811_daisy.h for Options
@@ -119,6 +125,8 @@ uint8_t rx_cfg[TOTAL_IC][8];
 
 /* This is gonna use a ton of memory but it's what the old one does. We can change it */
 long open_wires[TOTAL_IC];
+
+uint8_t gCAN_MSG[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 int main (void)
 {
@@ -229,6 +237,9 @@ int main (void)
 
             FLAGS &= ~READ_VALS;
 
+            read_all_pins();
+            CAN_transmit(3, 0x0C, 8, gCAN_MSG);
+
         }
 
         wdt_reset();
@@ -272,6 +283,31 @@ ISR(TIMER1_COMPA_vect)
   FLAGS |= READ_VALS;
 }
 
+
+//SHUTDOWN SENSING//////////////////////////////////////////////////////////////
+
+// Poll every input pin and update
+// our CAN values.
+static inline void read_all_pins(void)
+{
+    if (bit_is_set(PIN_RS, RS))
+    {
+        gCAN_MSG[CAN_IDX_RS] = 0xFF;
+    }
+    else
+    {
+        gCAN_MSG[CAN_IDX_RS] = 0x00;
+    }
+
+    if (bit_is_set(PIN_TAC, TAC))
+    {
+        gCAN_MSG[CAN_IDX_TAC] = 0xFF;
+    }
+    else
+    {
+        gCAN_MSG[CAN_IDX_TAC] = 0x00;
+    }
+}
 
 //TRANSMIT VALUES///////////////////////////////////////////////////////////////
 
