@@ -43,10 +43,10 @@ ISR(CAN_INT_vect) {
         msg = CANMSG;
 
         // Brake status
-        if (msg == 0x01) {
-            gFlags |= _BV(FLAG_BRAKE_PEDAL);
-        } else {
+        if (msg == 0x00) {
             gFlags &= ~_BV(FLAG_BRAKE_PEDAL);
+        } else {
+            gFlags |= _BV(FLAG_BRAKE_PEDAL);
         }
 
         // Reset status
@@ -82,6 +82,7 @@ ISR(CAN_INT_vect) {
                             CAN_IDM_single);
     }
 
+    // Air Control
     CANPAGE = (2 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -180,12 +181,25 @@ void updateStateFromFlags(void) {
 
     // Update our CAN message
     if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)
-            && bit_is_set(gFlags, FLAG_BRAKE_PEDAL)) {
+            && bit_is_set(gFlags, FLAG_BRAKE_PEDAL)
+            && bit_is_set(gFlags, FLAG_AIR_CLOSED) ) {
         gCANMessage[0] = 0xFF;
-    } else {
-        gCANMessage[0] = 0x00;
-    }
 
+        // Enable R2D sound
+        PORT_R2D |= _BV(R2D);
+        gR2DTimeout = 30;
+
+        // Print to screen
+        lcd_gotoxy(0, 0);
+        lcd_puts("R2D On");
+    }
+   
+
+    if (bit_is_clear(gFlags, FLAG_AIR_CLOSED)) {
+        gCANMessage[0] = 0x00;
+    } 
+
+    /*
     if (bit_is_set(gFlags, FLAG_AIR_CLOSED)) {
         // Enable R2D sound
         PORT_R2D |= _BV(R2D);
@@ -195,6 +209,7 @@ void updateStateFromFlags(void) {
         lcd_gotoxy(0, 0);
         lcd_puts("R2D On");
     }
+    */
 }
 
 int main(void) {
