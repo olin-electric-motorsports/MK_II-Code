@@ -260,10 +260,10 @@ ISR(CAN_INT_vect) {
         volatile uint8_t msg = CANMSG;
 
         // Startup status
-        if (msg == 0x00) {
-            gFlags &= ~_BV(FLAG_MOTOR_ON);
-        } else {
+        if (msg == 0xFF) {
             gFlags |= _BV(FLAG_MOTOR_ON);
+        } else {
+            gFlags &= ~_BV(FLAG_MOTOR_ON);
         }
 
         // Reset status
@@ -271,6 +271,28 @@ ISR(CAN_INT_vect) {
         CAN_wait_on_receive(MOB_DASHBOARD,
                             CAN_IDT_DASHBOARD,
                             CAN_IDT_DASHBOARD_L,
+                            CAN_IDM_single);
+    }
+
+    // Air Control
+    CANPAGE = (MOB_AIR_CONTROL << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        // Unrolled read for 5th byte
+        volatile uint8_t msg = CANMSG;
+        msg = CANMSG;
+
+        // Startup status
+        if (msg == 0xFF) {
+            //gFlags |= _BV(FLAG_MOTOR_ON);
+        } else {
+            gFlags &= ~_BV(FLAG_MOTOR_ON);
+        }
+
+        // Reset status
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(MOB_AIR_CONTROL,
+                            CAN_IDT_AIR_CONTROL,
+                            CAN_IDT_AIR_CONTROL_L,
                             CAN_IDM_single);
     }
 }
@@ -306,6 +328,12 @@ int main(void) {
 
         // Act on flags
         handleFlags();
+
+        // Listen to Dashboard!
+        CAN_wait_on_receive(MOB_DASHBOARD,
+                            CAN_IDT_DASHBOARD,
+                            CAN_IDT_DASHBOARD_L,
+                            CAN_IDM_single);
     }
 }
 
