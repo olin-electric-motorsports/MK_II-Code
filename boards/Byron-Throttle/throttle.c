@@ -171,9 +171,14 @@ void readAndStoreThrottle(void) {
         throttle2_mapped = 0xFF;
     }
 
-    // Set throttle
-    gThrottle[0] = throttle1_mapped;
-    gThrottle[1] = throttle2_mapped;
+    // Set throttle if brake is not pressed
+    if (bit_is_clear(gFlags, FLAG_BRAKE)) {
+        gThrottle[0] = throttle1_mapped;
+        gThrottle[1] = throttle2_mapped;
+    } else {
+        gThrottle[0] = 0x00;
+        gThrottle[1] = 0x00;
+    }
 }
 
 void updateBrake(void) {
