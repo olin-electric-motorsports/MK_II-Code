@@ -14,6 +14,7 @@
 #define FLAG_IMMEDIATE_CAN  2
 #define FLAG_PANIC          3
 #define FLAG_MOTOR_ON       4
+#define FLAG_THROTTLE_BRAKE 5
 
 #define MOB_DASHBOARD         0
 #define MOB_THROTTLE          1
@@ -171,6 +172,11 @@ void readAndStoreThrottle(void) {
         throttle2_mapped = 0xFF;
     }
 
+    if (throttle1_mapped < 0x05) {
+        gFlags &= ~_BV(FLAG_THROTTLE_BRAKE);
+    }
+
+    updateBrake();
     // Set throttle if brake is not pressed
     if (bit_is_clear(gFlags, FLAG_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
@@ -178,6 +184,7 @@ void readAndStoreThrottle(void) {
     } else {
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        gFlags |= _BV(FLAG_THROTTLE_BRAKE);
     }
 }
 
@@ -328,8 +335,8 @@ int main(void) {
     // Love me some infinite while loops
     while(1) {
         // We will just constantly update our values
-        readAndStoreThrottle();
         updateBrake();
+        readAndStoreThrottle();
 
         // Act on flags
         handleFlags();

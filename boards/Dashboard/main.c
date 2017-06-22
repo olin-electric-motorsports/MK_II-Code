@@ -58,6 +58,7 @@ ISR(CAN_INT_vect) {
     }
 
     // Check second MOb (BMS)
+    /*
     CANPAGE = (1 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -79,6 +80,33 @@ ISR(CAN_INT_vect) {
         CAN_wait_on_receive(1, 
                             CAN_IDT_BMS_MASTER, 
                             CAN_IDT_BMS_MASTER_L, 
+                            CAN_IDM_single);
+    }
+    */
+
+    // BMS Flags Message
+    CANPAGE = (1 << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG; // 0
+
+        // Turn on BMS light
+        if (msg & 0b00101100) { // Compare to OPEN_SHDN thing
+            PORT_LED1 |= _BV(LED1);
+        } else {
+            PORT_LED1 &= ~_BV(LED1);
+        }
+
+        // Turn on IMD light
+        if (msg & 0b10000000) { // Compare to IMD_TRIPPED thing
+            PORT_LED2 &= ~_BV(LED2);
+        } else {
+            PORT_LED2 |= _BV(LED2);
+        }
+        
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(1,
+                            0x19,
+                            1,
                             CAN_IDM_single);
     }
 
@@ -105,8 +133,10 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT0_vect) {
     if(bit_is_set(PINB, PB5)) {
+        //PORT_LED1 |= _BV(LED1);
         gFlags |= _BV(FLAG_STARTUP_BUTTON);
     } else {
+        //PORT_LED1 &= ~_BV(LED1);
         gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
     }
 }
@@ -235,8 +265,8 @@ int main(void) {
                         CAN_IDT_THROTTLE_L,
                         CAN_IDM_single);
     CAN_wait_on_receive(1,
-                        CAN_IDT_BMS_MASTER,
-                        CAN_IDT_BMS_MASTER_L,
+                        0x19,
+                        1,
                         CAN_IDM_single);
     CAN_wait_on_receive(2,
                         CAN_IDT_AIR_CONTROL,
@@ -244,7 +274,7 @@ int main(void) {
                         CAN_IDM_single);
 
     // Print something
-    lcd_puts("I am Dashboard!");
+    lcd_puts("OEM MK.II");
     
     // Our favorite infinite loop!
     while(1) {
