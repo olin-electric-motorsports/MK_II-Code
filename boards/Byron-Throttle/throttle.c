@@ -178,7 +178,7 @@ void readAndStoreThrottle(void) {
 
     updateBrake();
     // Set throttle if brake is not pressed
-    if (bit_is_clear(gFlags, FLAG_BRAKE)) {
+    if (bit_is_clear(gFlags, FLAG_BRAKE) && bit_is_clear(gFlags, FLAG_THROTTLE_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
     } else {

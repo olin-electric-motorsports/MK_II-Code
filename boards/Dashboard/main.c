@@ -133,10 +133,10 @@ ISR(CAN_INT_vect) {
 
 ISR(PCINT0_vect) {
     if(bit_is_set(PINB, PB5)) {
-        //PORT_LED1 |= _BV(LED1);
+        //PORT_LED1 &= ~_BV(LED1);
         gFlags |= _BV(FLAG_STARTUP_BUTTON);
     } else {
-        //PORT_LED1 &= ~_BV(LED1);
+        //PORT_LED1 |= _BV(LED1);
         gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
     }
 }
@@ -204,8 +204,10 @@ void updateStateFromFlags(void) {
     if (bit_is_set(diff, FLAG_STARTUP_BUTTON)) {
         if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)) {
             PORT_START_LED |= _BV(START_LED);
+            gCANMessage[3] = 0xff;
         } else {
             PORT_START_LED &= ~_BV(START_LED);
+            gCANMessage[3] = 0x00;
         }
     }
 
@@ -284,5 +286,15 @@ int main(void) {
             updateStateFromFlags();
             gFlags_old = gFlags;
         }
+
+        /*
+        if(bit_is_set(PINB, PB5)) {
+            PORT_LED1 &= ~_BV(LED1);
+            gFlags |= _BV(FLAG_STARTUP_BUTTON);
+        } else {
+            PORT_LED1 |= _BV(LED1);
+            gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
+        }
+        */
     }
 }
