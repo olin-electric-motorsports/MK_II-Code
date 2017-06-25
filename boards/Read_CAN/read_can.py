@@ -1,6 +1,7 @@
 import serial
 import time
 
+
 class Message(object):
     def __init__(self, can_id, bytes, line):
         self.can_id = can_id
@@ -41,6 +42,7 @@ class CAN(object):
             #v_list =  [("%0.3f" % cell.voltage)+"V "+("%0.3f" % cell.temp)+"C |" for cell in segment]
             #string = " ".join(str(x) for x in v_list)
             #print str(segment[0].segment) + ": "+("%0.3f" % segment[0].vref2)+"Vref2 |" + string
+            #if (key == '0xC0'):
             if ((time.time() - self.message_dict[key].time) < 10):
                 print self.message_dict[key].line[:-2] + "Time:" + str(self.message_dict[key].time)
 

@@ -21,6 +21,7 @@
 #define FLAG_STARTUP_BUTTON  0
 #define FLAG_BRAKE_PEDAL     1
 #define FLAG_AIR_CLOSED      2
+#define FLAG_UPDATE_THROTTLE 3
 
 
 /* Global Variables */
@@ -29,6 +30,10 @@ uint8_t gFlags_old = 0xFF;
 uint8_t gCANMessage[8] = { 0, 0, 0, 0,
                            0, 0, 0, 0 };
 volatile uint8_t gR2DTimeout = 0x00;
+volatile uint8_t gThrottle_1 = 0x00;
+volatile uint8_t gThrottle_2 = 0x00;
+volatile uint8_t gThrottle_smoothed = 0x00;
+uint8_t gThrottle_old = 0x00;
 
 
 /* Interrupts */
@@ -39,15 +44,22 @@ ISR(CAN_INT_vect) {
     if (bit_is_set(CANSTMOB, RXOK)) {
         // Unrolled read for 5th byte
         volatile uint8_t msg = CANMSG;
-        msg = CANMSG;
-        msg = CANMSG;
+        gThrottle_1 = msg;
 
+        msg = CANMSG;
+        gThrottle_2 = msg;
+
+        msg = CANMSG;
         // Brake status
         if (msg == 0x00) {
             gFlags &= ~_BV(FLAG_BRAKE_PEDAL);
         } else {
             gFlags |= _BV(FLAG_BRAKE_PEDAL);
         }
+
+        msg = CANMSG;
+        gThrottle_smoothed = msg;
+        gFlags |= _BV(FLAG_UPDATE_THROTTLE);
 
         // Reset status
         CANSTMOB = 0x00;
@@ -223,13 +235,21 @@ void updateStateFromFlags(void) {
 
         // Print to screen
         lcd_gotoxy(0, 0);
-        lcd_puts("R2D On");
+        lcd_puts("R2D On      ");
     }
    
 
     if (bit_is_clear(gFlags, FLAG_AIR_CLOSED)) {
         gCANMessage[0] = 0x00;
     } 
+
+    if (gThrottle_smoothed != gThrottle_old) {
+        gThrottle_old = gThrottle_smoothed;
+        lcd_gotoxy(0, 1);
+        char buff[16] = {'\0'};
+        sprintf(buff, "%d %d %d", gThrottle_1, gThrottle_2, gThrottle_smoothed);
+        lcd_puts(buff);
+    }
 
     /*
     if (bit_is_set(gFlags, FLAG_AIR_CLOSED)) {

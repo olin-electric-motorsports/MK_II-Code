@@ -144,7 +144,7 @@ int main (void)
     init_read_timer();
 
     //PWM init
-    init_fan_pwm(0x80);
+    init_fan_pwm(0x20);
 
     //Watchdog init
     wdt_enable(WDTO_8S);

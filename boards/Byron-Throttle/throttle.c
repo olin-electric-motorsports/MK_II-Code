@@ -15,6 +15,7 @@
 #define FLAG_PANIC          3
 #define FLAG_MOTOR_ON       4
 #define FLAG_THROTTLE_BRAKE 5
+#define FLAG_THROTTLE_10    6
 
 #define MOB_DASHBOARD         0
 #define MOB_THROTTLE          1
@@ -23,18 +24,22 @@
 #define MOB_PANIC             4
 
 #define THROTTLE_DEADZONE  10
-#define THROTTLE_MAX_ADJUST_AMOUNT  10
+#define THROTTLE_MAX_ADJUST_AMOUNT  50
 
 
 /* Global Variables */
 volatile uint8_t gFlags = 0x00;
+uint8_t throttle_10_count = 0x00;
 uint8_t gThrottle[2] = {0x00, 0x00};
+uint8_t gThrottle_smoothed = 0x00;
+uint16_t gFilter_reg = 0x00;
+
 uint8_t gCanMsg[8] = {0x00};
 uint8_t gCanMsgMotorController[8] = {0x00};
 
 // Throttle mapping defaults
 uint8_t Throttle_1_HIGH = 0xE7;
-uint8_t Throttle_1_LOW  = 0x9E;
+uint8_t Throttle_1_LOW  = 0xA2;
 uint8_t Throttle_2_HIGH = 0xA1;
 uint8_t Throttle_2_LOW  = 0x6D;
 
@@ -52,7 +57,8 @@ void updateBrake(void);
 /* Function Definitions */
 
 void initADC(void) {
-    ADCSRA |= _BV(ADEN) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0);
+    //ADCSRA |= _BV(ADEN) | _BV(ADPS2) | _BV(ADPS1) | _BV(ADPS0);
+    ADCSRA |= _BV(ADEN) | _BV(ADPS2) | _BV(ADPS0);
 
     //Enable internal reference voltage
     ADCSRB &= _BV(AREFEN);
@@ -81,7 +87,7 @@ void initTimer(void) {
     TCCR1B |= _BV(WGM12);
 
     // 1/1024 prescaler
-    TCCR1B |= _BV(CS12) | _BV(CS10);
+    TCCR1B |= _BV(CS12);// | _BV(CS10);
 
     // Trigger on 0xFF (about twice a second)
     OCR1AL = 0x0F;
@@ -144,13 +150,50 @@ void readAndStoreThrottle(void) {
     uint8_t throttle1_mapped = ((throttle1 - Throttle_1_LOW) * 0xFF) / (Throttle_1_HIGH - Throttle_1_LOW);
     uint8_t throttle2_mapped = ((throttle2 - Throttle_2_LOW) * 0xFF) / (Throttle_2_HIGH - Throttle_2_LOW);
 
+    // Rolling average
+    static uint8_t rolling1[32];
+    static uint8_t rolling2[32];
+
+    for (int i=0; i < 31; i++) {
+        rolling1[i] = rolling1[i+1];
+        rolling2[i] = rolling2[i+1];
+    }
+    rolling1[31] = throttle1_mapped;
+    rolling2[31] = throttle2_mapped;
+
+    uint16_t avg1 = 0;
+    uint16_t avg2 = 0;
+    for (int i=0; i < 32; i++) {
+        avg1 += rolling1[i];
+        avg2 += rolling2[i];
+    }
+
+    throttle1_mapped = avg1 >> 5;
+    throttle2_mapped = avg2 >> 5;
+
+    /*
+    static uint16_t filt1;
+    static uint16_t filt2;
+    filt1 = filt1 - (filt1 << 4) + throttle1_mapped;
+    throttle1 = filt1 >> 4;
+
+    filt2 = filt2 - (filt2 << 4) + throttle2_mapped;
+    throttle2 = filt2 >> 4;
+    */
+
+
+
     // Check if they are within 10%
     uint8_t err = 0;
     if (throttle1_mapped > throttle2_mapped && (throttle1_mapped - throttle2_mapped) >= (0xFF/10)) {
         err = 1;
+        throttle_10_count++;
+        gFlags |= _BV(FLAG_THROTTLE_10);
     }
     else if (throttle2_mapped > throttle1_mapped && (throttle2_mapped - throttle1_mapped) >= (0xFF/10)) {
         err = 1;
+        throttle_10_count++;
+        gFlags |= _BV(FLAG_THROTTLE_10);
     }
 
     // Oops we got an error
@@ -162,17 +205,17 @@ void readAndStoreThrottle(void) {
     // Deadzone
     if (throttle1_mapped < THROTTLE_DEADZONE) {
         throttle1_mapped = 0x00;
-    } else if (throttle1_mapped > (Throttle_1_HIGH - THROTTLE_DEADZONE)) {
+    } else if (throttle1_mapped > (0xFF - THROTTLE_DEADZONE)) {
         throttle1_mapped = 0xFF;
     }
 
     if (throttle2_mapped < THROTTLE_DEADZONE) {
         throttle2_mapped = 0x00;
-    } else if (throttle2_mapped > (Throttle_2_HIGH - THROTTLE_DEADZONE)) {
+    } else if (throttle2_mapped > (0xFF - THROTTLE_DEADZONE)) {
         throttle2_mapped = 0xFF;
     }
 
-    if (throttle1_mapped < 0x05) {
+    if (throttle1_mapped < 38 || throttle2_mapped < 38) {
         gFlags &= ~_BV(FLAG_THROTTLE_BRAKE);
     }
 
@@ -181,9 +224,15 @@ void readAndStoreThrottle(void) {
     if (bit_is_clear(gFlags, FLAG_BRAKE) && bit_is_clear(gFlags, FLAG_THROTTLE_BRAKE)) {
         gThrottle[0] = throttle1_mapped;
         gThrottle[1] = throttle2_mapped;
+        //gThrottle[0] = throttle1;
+        //gThrottle[1] = throttle2;
+
+        //gFilter_reg = gFilter_reg - (gFilter_reg >> 2) + gThrottle[0];
+        //gThrottle_smoothed = gFilter_reg >> 2;
     } else {
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        //gThrottle_smoothed = 0x00;
         gFlags |= _BV(FLAG_THROTTLE_BRAKE);
     }
 }
@@ -209,10 +258,10 @@ void sendCanMessages(void) {
     gCanMsg[0] = gThrottle[0];
     gCanMsg[1] = gThrottle[1];
     gCanMsg[2] = bit_is_set(gFlags, FLAG_BRAKE) ? 0xFF : 0x00;
-    gCanMsg[3] = 0x00; // TODO: BSPD
-    gCanMsg[4] = 0x00; // TODO: Startup?
-    gCanMsg[5] = 0x00; // TODO: Shutdown
-    gCanMsg[6] = 0x00; // TODO: Shutdown
+    gCanMsg[3] = gThrottle_smoothed;
+    gCanMsg[4] = bit_is_set(gFlags, FLAG_THROTTLE_10) ? 0xFF : 0x00;
+    gCanMsg[5] = bit_is_set(gFlags, FLAG_THROTTLE_BRAKE) ? 0xFF : 0x00;
+    gCanMsg[6] = throttle_10_count; // TODO: Shutdown
     gCanMsg[7] = 0x00; // TODO: Shutdown
 
     CAN_transmit(MOB_THROTTLE,
@@ -223,6 +272,7 @@ void sendCanMessages(void) {
     // Send out Motor controller info
     // REMAP
     uint16_t thrott = (uint16_t) gThrottle[0];
+    //uint16_t thrott = (uint16_t) gThrottle_smoothed;
     uint16_t mc_remap = (uint16_t)(thrott * 9);
     gCanMsgMotorController[0] = mc_remap; // Speed mode
     gCanMsgMotorController[1] = mc_remap >> 8; // Speed mode
@@ -243,6 +293,7 @@ void handleFlags(void) {
     if (bit_is_set(gFlags, FLAG_PANIC)) {
         gThrottle[0] = 0x00;
         gThrottle[1] = 0x00;
+        gThrottle_smoothed = 0x00;
 
         uint8_t msg[] = {0x21};
         CAN_transmit(MOB_PANIC,
