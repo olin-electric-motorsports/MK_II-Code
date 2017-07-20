@@ -51,5 +51,5 @@ class CAN(object):
 
 if __name__ == '__main__':
 
-    can = CAN('/dev/cu.usbmodem14111')
+    can = CAN('/dev/cu.usbmodem1411')
     can.run()

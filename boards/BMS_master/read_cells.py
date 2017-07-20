@@ -113,7 +113,7 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-    can = CAN('/dev/cu.usbmodem14111')
+    can = CAN('/dev/cu.usbmodem1411')
     can.run()
 
 	#voltages = [1.5345, 1.5456, 1.5454, 1.5406, 1.5414, 1.5434, 1.5547, 1.5527, 1.5454, 1.5445, 1.5554]
