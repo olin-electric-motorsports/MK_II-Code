@@ -21,7 +21,7 @@ File datafile;
 
 void setup()
 {
-    Serial.begin(9600);
+    Serial.begin(115200);
     pinMode(LED,OUTPUT);
 
 START_SD:
@@ -65,6 +65,8 @@ START_INIT:
 
 void loop()
 {
+
+START_LOOP:
     unsigned char len = 0;
     unsigned char buf[8];
 
@@ -72,56 +74,30 @@ void loop()
     {
         CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
 
-        datafile = SD.open(filename, FILE_WRITE);
-
         unsigned char canId = CAN.getCanId();
-        
-        datafile.print("CAN:");
-        //datafile.print(canId, HEX);
-        
-        //datafile.close();
-        
-        PrintHex8(canId);
+        String out = "0x";
+        if (canId < 16) out += "0";
+        out += String(canId, HEX);
+        out += " : ";
 
-        //datafile = SD.open(filename, FILE_WRITE);
+
+        /*  CAN Address to be displayed in the serial monitor*/
+        if (canId != 16) goto START_LOOP;
         
-        datafile.print(" MSG:");
-
-        //datafile.close();
-
         for(int i = 0; i<len; i++)    // print the data
         {
-            //datafile.print(buf[i],HEX);
-            PrintHex8(buf[i]);
-
-            //datafile = SD.open(filename, FILE_WRITE);
-            
-            datafile.print(",");   
-            
-            //datafile.close();   
+            out += String(buf[i],HEX)+" ";
         }
 
-        //datafile = SD.open(filename, FILE_WRITE);
+        out += "time: ";
+        out += millis();
+        out += "\n";
 
-        datafile.print("time: ");
-        datafile.print(millis());
-        datafile.println();
-
+        datafile = SD.open(filename, FILE_WRITE);
+        datafile.print(out);
         datafile.close();
+        
+        Serial.print(out);
     }
 }
-
-void PrintHex8(uint8_t data) // prints 8-bit data in hex with leading zeroes
-{
-      
-       //File datafile = SD.open(filename, FILE_WRITE);
-  
-       datafile.print("0x"); 
-       if (data<0x10) 
-       {
-        datafile.print("0");
-       } 
-       datafile.print(data,HEX);   
-
-       //datafile.close();
-}
+ 
