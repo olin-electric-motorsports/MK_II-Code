@@ -57,6 +57,7 @@ uint8_t gCAN_MSG[8] = { 0x00, 0x00, 0x00, 0x00,
                         0x00, 0x00, 0x00, 0x00 };
 uint8_t gPRECHARGE_TIMER = 0x00;
 
+uint8_t clock_prescale = 0x00;
 
 // CAN
 ISR(CAN_INT_vect) {
@@ -67,8 +68,10 @@ ISR(CAN_INT_vect) {
 ISR(TIMER0_COMPA_vect) {
     // We just set a flag here and let main() handle
     // things
+    if (clock_prescale > 10)
     gFLAG |= _BV(UPDATE_STATUS);
-    
+    clock_prescale++;
+
     if (bit_is_set(gFLAG, SET_PRECHARGE)) {
         PORT_EXT_LED2 |= _BV(EXT_LED2);
         if (gPRECHARGE_TIMER > 200) {
@@ -226,4 +229,3 @@ int main(void) {
         // TODO: Put everything to sleep
     }
 }
-
