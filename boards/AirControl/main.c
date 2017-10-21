@@ -68,8 +68,10 @@ ISR(CAN_INT_vect) {
 ISR(TIMER0_COMPA_vect) {
     // We just set a flag here and let main() handle
     // things
-    if (clock_prescale > 10)
-    gFLAG |= _BV(UPDATE_STATUS);
+    if (clock_prescale > 10) {
+      gFLAG |= _BV(UPDATE_STATUS);
+      clock_prescale = 0;
+    }
     clock_prescale++;
 
     if (bit_is_set(gFLAG, SET_PRECHARGE)) {
