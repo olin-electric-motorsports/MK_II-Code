@@ -37,6 +37,9 @@ uint16_t gFilter_reg = 0x00;
 uint8_t gCanMsg[8] = {0x00};
 uint8_t gCanMsgMotorController[8] = {0x00};
 
+uint8_t timer_counter = 0; // Timer scale down variables
+uint8_t timer_scale_factor = 40; // Timer from 4MHz -> 4KHz -> 100Hz
+
 // Throttle mapping defaults
 uint8_t Throttle_1_HIGH = 0xE7;
 uint8_t Throttle_1_LOW  = 0xA2;
@@ -112,7 +115,7 @@ void readAndStoreThrottle(void) {
     uint8_t throttle2 = (uint8_t) (ADC >> 2);
 
     // Do some Math
-    
+
     // Adjust for Throttle slop
     if (throttle1 > Throttle_1_HIGH) {
         if (throttle1 > (Throttle_1_HIGH + THROTTLE_MAX_ADJUST_AMOUNT)) {
@@ -313,7 +316,11 @@ void handleFlags(void) {
 /* Interrupt Vectors */
 
 ISR(TIMER1_COMPA_vect) {
-    sendCanMessages();
+    timer_counter ++;
+    if (timer_counter > timer_scale_factor) {
+        sendCanMessages();
+        timer_counter = 0;
+    }
 }
 
 ISR(CAN_INT_vect) {
@@ -373,12 +380,12 @@ int main(void) {
 
     CAN_init(CAN_ENABLED);
     // Set up our CAN receives
-    CAN_wait_on_receive(MOB_DASHBOARD, 
+    CAN_wait_on_receive(MOB_DASHBOARD,
                         CAN_IDT_DASHBOARD,
                         CAN_IDT_DASHBOARD_L,
                         CAN_IDM_single);
 
-    CAN_wait_on_receive(MOB_AIR_CONTROL, 
+    CAN_wait_on_receive(MOB_AIR_CONTROL,
                         CAN_IDT_AIR_CONTROL,
                         CAN_IDT_AIR_CONTROL_L,
                         CAN_IDM_single);
@@ -399,4 +406,3 @@ int main(void) {
                             CAN_IDM_single);
     }
 }
-
