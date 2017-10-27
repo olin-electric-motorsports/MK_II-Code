@@ -52,6 +52,7 @@ class CAN(object):
 
 
 if __name__ == '__main__':
-
     can = CAN('/dev/ttyACM0')
     can.run()
+    #can = CAN('/dev/cu.usbmodem1411')
+    #can.run()

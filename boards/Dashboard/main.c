@@ -42,6 +42,7 @@ ISR(CAN_INT_vect) {
     // Check first MOb (Throttle)
     CANPAGE = (0 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
+        gCANMessage[2] = 0x00;
         // Unrolled read for 5th byte
         volatile uint8_t msg = CANMSG;
         gThrottle_1 = msg;
@@ -144,6 +145,7 @@ ISR(CAN_INT_vect) {
 }
 
 ISR(PCINT0_vect) {
+    /*
     if(bit_is_set(PINB, PB5)) {
         //PORT_LED1 &= ~_BV(LED1);
         gFlags |= _BV(FLAG_STARTUP_BUTTON);
@@ -151,6 +153,7 @@ ISR(PCINT0_vect) {
         //PORT_LED1 |= _BV(LED1);
         gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
     }
+    */
 }
 
 ISR(TIMER0_COMPA_vect) {
@@ -191,6 +194,14 @@ void initTimer(void) {
 }
 
 void checkShutdownState(void) {
+    if(bit_is_set(PINB, PB5)) {
+        gFlags |= _BV(FLAG_STARTUP_BUTTON);
+        gCANMessage[4] = 0xff;
+    } else {
+        gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
+        gCANMessage[4] = 0x00;
+    }
+
     if (bit_is_set(PINC, PC0)) {
         gCANMessage[5] = 0xFF;
     } else {
@@ -271,8 +282,8 @@ int main(void) {
     DDRB |= _BV(PB4) | _BV(PB6) | _BV(PB7);
 
     // Pin change interrupts
-    PCICR |= _BV(PCIE0);
-    PCMSK0 |= _BV(PCINT5); // PB5
+    //PCICR |= _BV(PCIE0);
+    //PCMSK0 |= _BV(PCINT5); // PB5
 
     // Set up our CAN timer
     initTimer();
