@@ -18,10 +18,14 @@ volatile uint8_t FLAGS = 0x00;
 #define OVER_TEMP           0b00100000
 #define OPEN_SHDN           0b00101100
 #define AIRS_CLOSED         0b01000000
+#define IMD_TRIPPED         0b10000000
 
 #define PROG_LED_1 PB5
 #define PROG_LED_2 PB6
 #define PROG_LED_3 PC0
+
+#define IMD_SENSE_PIN      PC7
+#define IMD_SENSE_PIN_REG  PINC
 
 // MUX defs
 #define MUX_CHANNELS 6
@@ -133,11 +137,14 @@ int main (void)
     CAN_init(CAN_ENABLED);
     CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
 
+    // BMS Open Relay Message
+    CAN_wait_on_receive(4, 0x02, 0x01, CAN_IDM_single);
+
     //Read Timer init
     init_read_timer();
 
     //PWM init
-    init_fan_pwm(0x80);
+    init_fan_pwm(0x20);
 
     //Watchdog init
     wdt_enable(WDTO_8S);
@@ -230,6 +237,12 @@ int main (void)
             CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
         }
 
+        if (bit_is_set(IMD_SENSE_PIN_REG, IMD_SENSE_PIN)) {
+            FLAGS |= IMD_TRIPPED;
+        } else {
+            FLAGS &= ~IMD_TRIPPED;
+        }
+
         wdt_reset();
     }
 
@@ -239,26 +252,39 @@ int main (void)
 
 ISR(CAN_INT_vect){
     // Check first MOb (AIR Control)
-    //cli();
     CANPAGE = (0 << MOBNB0);
-    
-    volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
-    msg = CANMSG;
-    can_recv_msg[0] =  msg; 
-    can_recv_msg[1] =  0x99; 
-    
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
+        msg = CANMSG;
+        can_recv_msg[0] =  msg; 
+        can_recv_msg[1] =  0x99; 
+        
 
-    if (msg == 0xFF) {
-        FLAGS |= AIRS_CLOSED;
-        //EXT_LED_PORT |= _BV(LED_ORANGE);
-    } else {
-        FLAGS &= ~(AIRS_CLOSED);
-        //EXT_LED_PORT &= ~_BV(LED_ORANGE);
+        if (msg == 0xFF) {
+            FLAGS |= AIRS_CLOSED;
+            //EXT_LED_PORT |= _BV(LED_ORANGE);
+        } else {
+            FLAGS &= ~(AIRS_CLOSED);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
+        }
+
+        //setup to receive again
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
     }
 
-    //setup to receive again
-    CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
-    //sei();
+    // BMS Open Relay message
+    CANPAGE = (4 << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG;
+
+        if (msg != 0x00) {
+            FLAGS |= OPEN_SHDN;
+        }
+        
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(4, 0x02, 0x01, CAN_IDM_single);
+    }
 }
 
 ISR(PCINT0_vect)

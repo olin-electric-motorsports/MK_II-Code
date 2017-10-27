@@ -21,6 +21,7 @@
 #define FLAG_STARTUP_BUTTON  0
 #define FLAG_BRAKE_PEDAL     1
 #define FLAG_AIR_CLOSED      2
+#define FLAG_UPDATE_THROTTLE 3
 
 
 /* Global Variables */
@@ -29,6 +30,10 @@ uint8_t gFlags_old = 0xFF;
 uint8_t gCANMessage[8] = { 0, 0, 0, 0,
                            0, 0, 0, 0 };
 volatile uint8_t gR2DTimeout = 0x00;
+volatile uint8_t gThrottle_1 = 0x00;
+volatile uint8_t gThrottle_2 = 0x00;
+volatile uint8_t gThrottle_smoothed = 0x00;
+uint8_t gThrottle_old = 0x00;
 
 
 /* Interrupts */
@@ -40,17 +45,22 @@ ISR(CAN_INT_vect) {
         gCANMessage[2] = 0x00;
         // Unrolled read for 5th byte
         volatile uint8_t msg = CANMSG;
-        msg = CANMSG;
-        msg = CANMSG;
+        gThrottle_1 = msg;
 
+        msg = CANMSG;
+        gThrottle_2 = msg;
+
+        msg = CANMSG;
         // Brake status
         if (msg == 0x00) {
             gFlags &= ~_BV(FLAG_BRAKE_PEDAL);
-            gCANMessage[3] = 0x00;
         } else {
             gFlags |= _BV(FLAG_BRAKE_PEDAL);
-            gCANMessage[3] = 0xff;
         }
+
+        msg = CANMSG;
+        gThrottle_smoothed = msg;
+        gFlags |= _BV(FLAG_UPDATE_THROTTLE);
 
         // Reset status
         CANSTMOB = 0x00;
@@ -61,6 +71,7 @@ ISR(CAN_INT_vect) {
     }
 
     // Check second MOb (BMS)
+    /*
     CANPAGE = (1 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -84,7 +95,35 @@ ISR(CAN_INT_vect) {
                             CAN_IDT_BMS_MASTER_L, 
                             CAN_IDM_single);
     }
+    */
 
+    // BMS Flags Message
+    CANPAGE = (1 << MOBNB0);
+    if (bit_is_set(CANSTMOB, RXOK)) {
+        volatile uint8_t msg = CANMSG; // 0
+
+        // Turn on BMS light
+        if (msg & 0b00101100) { // Compare to OPEN_SHDN thing
+            PORT_LED1 |= _BV(LED1);
+        } else {
+            PORT_LED1 &= ~_BV(LED1);
+        }
+
+        // Turn on IMD light
+        if (msg & 0b10000000) { // Compare to IMD_TRIPPED thing
+            PORT_LED2 &= ~_BV(LED2);
+        } else {
+            PORT_LED2 |= _BV(LED2);
+        }
+        
+        CANSTMOB = 0x00;
+        CAN_wait_on_receive(1,
+                            0x19,
+                            1,
+                            CAN_IDM_single);
+    }
+
+    // Air Control
     CANPAGE = (2 << MOBNB0);
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG;
@@ -108,8 +147,10 @@ ISR(CAN_INT_vect) {
 ISR(PCINT0_vect) {
     /*
     if(bit_is_set(PINB, PB5)) {
+        //PORT_LED1 &= ~_BV(LED1);
         gFlags |= _BV(FLAG_STARTUP_BUTTON);
     } else {
+        //PORT_LED1 |= _BV(LED1);
         gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
     }
     */
@@ -186,19 +227,42 @@ void updateStateFromFlags(void) {
     if (bit_is_set(diff, FLAG_STARTUP_BUTTON)) {
         if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)) {
             PORT_START_LED |= _BV(START_LED);
+            gCANMessage[3] = 0xff;
         } else {
             PORT_START_LED &= ~_BV(START_LED);
+            gCANMessage[3] = 0x00;
         }
     }
 
     // Update our CAN message
     if (bit_is_set(gFlags, FLAG_STARTUP_BUTTON)
-            && bit_is_set(gFlags, FLAG_BRAKE_PEDAL)) {
+            && bit_is_set(gFlags, FLAG_BRAKE_PEDAL)
+            && bit_is_set(gFlags, FLAG_AIR_CLOSED) ) {
         gCANMessage[0] = 0xFF;
-    } else {
+
+        // Enable R2D sound
+        PORT_R2D |= _BV(R2D);
+        gR2DTimeout = 30;
+
+        // Print to screen
+        lcd_gotoxy(0, 0);
+        lcd_puts("R2D On      ");
+    }
+   
+
+    if (bit_is_clear(gFlags, FLAG_AIR_CLOSED)) {
         gCANMessage[0] = 0x00;
+    } 
+
+    if (gThrottle_smoothed != gThrottle_old) {
+        gThrottle_old = gThrottle_smoothed;
+        lcd_gotoxy(0, 1);
+        char buff[16] = {'\0'};
+        sprintf(buff, "%d %d %d", gThrottle_1, gThrottle_2, gThrottle_smoothed);
+        lcd_puts(buff);
     }
 
+    /*
     if (bit_is_set(gFlags, FLAG_AIR_CLOSED)) {
         // Enable R2D sound
         PORT_R2D |= _BV(R2D);
@@ -208,6 +272,7 @@ void updateStateFromFlags(void) {
         lcd_gotoxy(0, 0);
         lcd_puts("R2D On");
     }
+    */
 }
 
 int main(void) {
@@ -233,8 +298,8 @@ int main(void) {
                         CAN_IDT_THROTTLE_L,
                         CAN_IDM_single);
     CAN_wait_on_receive(1,
-                        CAN_IDT_BMS_MASTER,
-                        CAN_IDT_BMS_MASTER_L,
+                        0x19,
+                        1,
                         CAN_IDM_single);
     CAN_wait_on_receive(2,
                         CAN_IDT_AIR_CONTROL,
@@ -242,7 +307,7 @@ int main(void) {
                         CAN_IDM_single);
 
     // Print something
-    lcd_puts("I am Dashboard!");
+    lcd_puts("OEM MK.II");
     
     // Our favorite infinite loop!
     while(1) {
@@ -252,5 +317,15 @@ int main(void) {
             updateStateFromFlags();
             gFlags_old = gFlags;
         }
+
+        /*
+        if(bit_is_set(PINB, PB5)) {
+            PORT_LED1 &= ~_BV(LED1);
+            gFlags |= _BV(FLAG_STARTUP_BUTTON);
+        } else {
+            PORT_LED1 |= _BV(LED1);
+            gFlags &= ~_BV(FLAG_STARTUP_BUTTON);
+        }
+        */
     }
 }
