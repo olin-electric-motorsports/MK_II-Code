@@ -16,8 +16,9 @@ volatile uint8_t FLAGS = 0x00;
 #define OVER_VOLTAGE        0b00001000
 #define SOFT_OVER_VOLTAGE   0b00010000
 #define OVER_TEMP           0b00100000
-#define OPEN_SHDN           0b00101100
+#define OPEN_SHDN           0b10101100
 #define AIRS_CLOSED         0b01000000
+#define ERR_OVF             0b10000000
 
 #define PROG_LED_1 PB5
 #define PROG_LED_2 PB6
@@ -198,7 +199,7 @@ int main (void)
             PORTC &= ~_BV(PROG_LED_3);
         }
 
-        if (FLAGS & AIRS_CLOSED){
+        if (FLAGS & ERR_OVF){
             EXT_LED_PORT |= _BV(LED_ORANGE);
         } else {
             EXT_LED_PORT &= ~_BV(LED_ORANGE);
@@ -223,7 +224,7 @@ int main (void)
                 error_counter++;
             } else { error_counter = 0; }
             if (error_counter > ERR_IN_ROW) {
-                FLAGS |= OPEN_SHDN;
+                FLAGS |= ERR_OVF;
             }
             o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             //Probably want to do something with error in the future
