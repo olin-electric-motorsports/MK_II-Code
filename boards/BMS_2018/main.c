@@ -30,7 +30,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x48
 
 //LTC68xx defs
-#define TOTAL_IC 8
+#define TOTAL_IC 1
 
 #define ENABLED 1
 #define DISABLED 0
@@ -167,6 +167,10 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
+    //_delay_ms(1000);
+    //EXT_LED_PORT &= ~_BV(LED_ORANGE);
+
 
     while(1) {
 
@@ -219,6 +223,7 @@ int main (void)
             EXT_LED_PORT ^= _BV(LED_GREEN);
             if (read_all_voltages() > 0) { // If we get over 3 sequential PEC errors, open SHDN
                 error_counter++;
+                EXT_LED_PORT |= _BV(LED_ORANGE);
             } else { error_counter = 0; }
             if (read_all_temperatures() > 0) {
                 error_counter++;
@@ -863,6 +868,17 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
     uint16_t data_pec;
     uint8_t data_counter=0; //data counter
     cell_data = (uint8_t *) malloc((NUM_RX_BYT*total_ic)*sizeof(uint8_t));
+    if (cell_data == NULL) {
+
+        // Turn LED on
+        EXT_LED_PORT |= _BV(LED_ORANGE);
+
+        while(1) {
+          _delay_ms(100);
+          EXT_LED_PORT ^= _BV(LED_ORANGE);
+        }
+
+    }
 
     if (reg == 0)
     {
