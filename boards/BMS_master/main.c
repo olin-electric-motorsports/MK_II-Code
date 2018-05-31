@@ -124,7 +124,7 @@ int main (void)
     PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
 
     PORTB |= _BV(PB2); //close relay
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
@@ -185,7 +185,7 @@ int main (void)
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
-            PORTB |= _BV(PROG_LED_1); 
+            PORTB |= _BV(PROG_LED_1);
         } else {
             PORTB &= ~_BV(PROG_LED_1);
         }
@@ -203,9 +203,9 @@ int main (void)
         }
 
         if (FLAGS & AIRS_CLOSED){
-            EXT_LED_PORT |= _BV(LED_ORANGE);
+            //EXT_LED_PORT |= _BV(LED_ORANGE);
         } else {
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (can_recv_msg[1] == 0x99){
@@ -214,14 +214,19 @@ int main (void)
             CAN_transmit(1,0x19,1,flags_msg);
             _delay_ms(5);
             CAN_transmit(1, 0x18, 2, can_recv_msg);
-            can_recv_msg[1] =  0x55; 
+            can_recv_msg[1] =  0x55;
             _delay_ms(5);
         }
 
-        if (FLAGS & READ_VALS) { 
+        //turn LED off at the start of each read so we can actually detect errors
+        EXT_LED_PORT &= ~_BV(LED_ORANGE);
+        if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
-            uint8_t error = 0;
+            int8_t error = 0;
             error += read_all_voltages();
+            if (error < 0) {
+              EXT_LED_PORT |= _BV(LED_ORANGE);
+            }
             error += read_all_temperatures();
             o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
             //Probably want to do something with error in the future
@@ -232,7 +237,7 @@ int main (void)
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
-            
+
             FLAGS &= ~READ_VALS;
             CAN_wait_on_receive(0, CAN_IDT_AIR_CONTROL, CAN_IDT_AIR_CONTROL_L, CAN_IDM_single);
         }
@@ -256,9 +261,9 @@ ISR(CAN_INT_vect){
     if (bit_is_set(CANSTMOB, RXOK)) {
         volatile uint8_t msg = CANMSG; //grab the first byte of the CAN message
         msg = CANMSG;
-        can_recv_msg[0] =  msg; 
-        can_recv_msg[1] =  0x99; 
-        
+        can_recv_msg[0] =  msg;
+        can_recv_msg[1] =  0x99;
+
 
         if (msg == 0xFF) {
             FLAGS |= AIRS_CLOSED;
@@ -281,7 +286,7 @@ ISR(CAN_INT_vect){
         if (msg != 0x00) {
             FLAGS |= OPEN_SHDN;
         }
-        
+
         CANSTMOB = 0x00;
         CAN_wait_on_receive(4, 0x02, 0x01, CAN_IDM_single);
     }
@@ -376,7 +381,7 @@ void transmit_temperatures(void)
 }
 
 /*!<
-  Cell Discharge Status will be transmitted in this CAN message, LSB 
+  Cell Discharge Status will be transmitted in this CAN message, LSB
   |           msg[0] |           msg[1] |           msg[2] |           msg[3] |    .....     |            msg[5] |            msg[6] |
   |------------------|------------------|------------------|------------------|--------------|-------------------|-------------------|
   |IC group (0 or 1) |IC1 Status High   |IC1 Status Low    |IC2 Status High   |    .....     |msg Cell 3 High    |IC 3 Status Low    |
@@ -428,9 +433,9 @@ void init_fan_pwm(uint8_t duty_cycle)
 
 //VOLTAGE MEASUREMENT///////////////////////////////////////////////////////////
 
-uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+int8_t read_all_voltages(void) // Start Cell ADC Measurement
 {
-    uint8_t error = 0;
+    int8_t error = 0;
 
     wakeup_sleep(TOTAL_IC);
 
@@ -438,8 +443,12 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     o_ltc6811_pollAdc();
     error = o_ltc6811_rdcv(0,TOTAL_IC,cell_codes); //Parse ADC measurements
 
+    if (error < 0) {
+      return error;
+    }
+
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
-        
+
         for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
             disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
             if (cell_codes[i][j] > OV_THRESHOLD) {
@@ -449,11 +458,11 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 
             if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
-                
+
                 if (FLAGS & AIRS_CLOSED){
                     enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
-                } 
-            } 
+                }
+            }
 
             if (cell_codes[i][j] < UV_THRESHOLD) {
                 FLAGS |= UNDER_VOLTAGE;
@@ -852,7 +861,7 @@ void o_ltc6811_adcv(
 /*
  * Reads and parses the ltc6811 cell voltage registers.
  */
-uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
+int8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
         uint8_t total_ic, // the number of ICs in the system
         uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
         )
@@ -864,7 +873,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
     const uint8_t NUM_CV_REG = 4;
 
     uint8_t *cell_data;
-    uint8_t pec_error = 0;
+    int8_t pec_error = 0;
     uint16_t parsed_cell;
     uint16_t received_pec;
     uint16_t data_pec;

@@ -8,7 +8,7 @@ void init_read_timer(void);
 void init_fan_pwm(uint8_t duty_cycle);
 void init_cfg(void);
 
-uint8_t read_all_voltages(void);
+int8_t read_all_voltages(void);
 uint8_t read_all_temperatures(void);
 
 void init_spi_master(void);
@@ -38,7 +38,7 @@ void o_ltc6811_adcv(
   uint8_t DCP, //Discharge Permit
   uint8_t CH //Cell Channels to be measured
 );
-uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
+int8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
                      uint8_t total_ic, // the number of ICs in the system
                      uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
                  );

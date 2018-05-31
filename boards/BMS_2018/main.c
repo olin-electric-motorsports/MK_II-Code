@@ -124,7 +124,7 @@ int main (void)
     PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
 
     PORTB |= _BV(PB2); //close relay
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
@@ -167,6 +167,7 @@ int main (void)
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
 
+    //just sanity check to confirm led is working
     //EXT_LED_PORT |= _BV(LED_ORANGE);
     //_delay_ms(1000);
     //EXT_LED_PORT &= ~_BV(LED_ORANGE);
@@ -204,9 +205,9 @@ int main (void)
         }
 
         if (FLAGS & ERR_OVF){
-            EXT_LED_PORT |= _BV(LED_ORANGE);
+            //EXT_LED_PORT |= _BV(LED_ORANGE);
         } else {
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (can_recv_msg[1] == 0x99){
@@ -219,9 +220,12 @@ int main (void)
             _delay_ms(5);
         }
 
+        //turn LED off at the start of each read so we can actually detect errors
+        EXT_LED_PORT &= ~_BV(LED_ORANGE);
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
-            if (read_all_voltages() > 0) { // If we get over 3 sequential PEC errors, open SHDN
+            //LJ 5/30/18 changed following conditional to look for <0 errors temorarily to check for pec errors
+            if (read_all_voltages() < 0) { // If we get over 3 sequential PEC errors, open SHDN
                 error_counter++;
                 EXT_LED_PORT |= _BV(LED_ORANGE);
             } else { error_counter = 0; }
@@ -417,9 +421,9 @@ void init_fan_pwm(uint8_t duty_cycle)
 
 //VOLTAGE MEASUREMENT///////////////////////////////////////////////////////////
 
-uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+int8_t read_all_voltages(void) // Start Cell ADC Measurement
 {
-    uint8_t error = 0;
+    int8_t error = 0;
 
     wakeup_sleep(TOTAL_IC);
 
@@ -427,7 +431,7 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
     o_ltc6811_pollAdc();
     error = o_ltc6811_rdcv(0,TOTAL_IC,cell_codes); //Parse ADC measurements
 
-    if (error > 0) {
+    if (error < 0) {
         return error;
     }
     for (uint8_t i = 0; i < TOTAL_IC; i++) {
@@ -850,7 +854,7 @@ void o_ltc6811_adcv(
 /*
  * Reads and parses the ltc6811 cell voltage registers.
  */
-uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
+int8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
         uint8_t total_ic, // the number of ICs in the system
         uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
         )
@@ -862,23 +866,12 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
     const uint8_t NUM_CV_REG = 4;
 
     uint8_t *cell_data;
-    uint8_t pec_error = 0;
+    int8_t pec_error = 0;
     uint16_t parsed_cell;
     uint16_t received_pec;
     uint16_t data_pec;
     uint8_t data_counter=0; //data counter
     cell_data = (uint8_t *) malloc((NUM_RX_BYT*total_ic)*sizeof(uint8_t));
-    if (cell_data == NULL) {
-
-        // Turn LED on
-        EXT_LED_PORT |= _BV(LED_ORANGE);
-
-        while(1) {
-          _delay_ms(100);
-          EXT_LED_PORT ^= _BV(LED_ORANGE);
-        }
-
-    }
 
     if (reg == 0)
     {
