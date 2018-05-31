@@ -182,8 +182,8 @@ int main (void)
          */
 
         if (FLAGS & OPEN_SHDN) {
-            // PORTB &= ~_BV(PB2); //open relay
-            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            PORTB &= ~_BV(PB2); //open relay
+            EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
@@ -241,10 +241,10 @@ int main (void)
             //o_ltc6811_wrcfg(TOTAL_IC, tx_cfg);
 
             //Probably want to do something with error in the future
-            //transmit_voltages();
+            transmit_voltages();
             //update discharge transistors
-            //transmit_temperatures();
-            //transmit_discharge_status();
+            transmit_temperatures();
+            transmit_discharge_status();
 
             //uint8_t test_msg[8] =  {1,2,3,4,5,6,7,8};
             //CAN_transmit(0, 0x13, 8, test_msg);
@@ -255,7 +255,6 @@ int main (void)
 
         wdt_reset();
     }
-
 }
 
 //ISRs//////////////////////////////////////////////////////////////////////////
@@ -458,40 +457,32 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
         LOG_println(tmp_msg, strlen(tmp_msg));
     }
 
-    // TODO: Add UART Debug
-
-    /*
-    if (error > 0) {
-        return error;
-    }
-    for (uint8_t i = 0; i < TOTAL_IC; i++) {
-        if ((i+1)%6 == 0) continue; // Skip 6 and 12
-        for (uint8_t j = 0; j < CELL_CHANNELS; j++) {
-            disable_discharge(i+1, j+1); //IC and Cell are 1-indexed}
-            if (cell_codes[i][j] > OV_THRESHOLD) {
-                FLAGS |= OVER_VOLTAGE;
-                error += 1;
+    // Do value checking
+    for (uint8_t ic = 0; ic < TOTAL_IC; ic++) {
+        for (uint8_t cell = 0; cell < CELL_CHANNELS; cell++) {
+            // Exclude the shorted cells
+            if (cell == 5 || cell == 11) {
+                continue;
             }
+            uint16_t cell_value = cell_codes[ic][cell];
 
-            if (cell_codes[i][j] > SOFT_OV_THRESHOLD) {
+            if (cell_value > OV_THRESHOLD) {
+                FLAGS |= OVER_VOLTAGE;
+            } else if (cell_value > SOFT_OV_THRESHOLD) {
                 FLAGS |= SOFT_OVER_VOLTAGE;
 
-                if (FLAGS & AIRS_CLOSED){
-                    enable_discharge(i+1, j+1); //IC and Cell are 1-indexed
+                // :( sad side-effects
+                if (FLAGS & AIRS_CLOSED) {
+                    // IC and Cell are 1-indexed for discharge
+                    enable_discharge(ic + 1, cell + 1);
                 }
-            }
-
-            if (cell_codes[i][j] < UV_THRESHOLD) {
+            } else if (cell_value < UV_THRESHOLD) {
                 FLAGS |= UNDER_VOLTAGE;
-                error += 1;
+            } else {
+                FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE | SOFT_OVER_VOLTAGE);
             }
         }
     }
-    if (error == 0) {
-        //upon successful execution clear flags
-        FLAGS &= ~(OVER_VOLTAGE | UNDER_VOLTAGE);
-    }
-    */
 
     return error;
 }
@@ -501,11 +492,12 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
 uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
 {
     uint8_t error = 0;
+    uint8_t over_temp = 0;
     //wakeup_sleep(TOTAL_IC); //only needed if not called directly after reading voltages
-    //Iterate through first mux
+
+    // Disable MUX2 and iterate through MUX1
     mux_disable(TOTAL_IC, MUX2_ADDRESS);
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
-
         //Changing channel over I2C is going to be tricky
         set_mux_channel(TOTAL_IC, MUX1_ADDRESS, i);
         //_delay_us(50); //TODO: This is a blatant guess
@@ -514,24 +506,32 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
 
-        if (error > 0) {
-            return error;
-        }
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
+            // Ignore broken thermbusters
+            if ( (j==4 && i==0) ||
+                 (j==4 && i==2) ||
+                 (j==4 && i==4) ||
+                 (j==4 && i==6) ||
+                 (j==4 && i==8) ||
+                 (j==6) ||
+                 (j==7 && i==0) ) 
+            {
+                continue;
+            }
+
             cell_temperatures[j][i*2] = aux_codes[j][0]; //Store temperatures
             uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_V_FRACTION;
             uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
+
             if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
-                error += 1;
+                over_temp = 1;
             }
-        
         }
-
-
     }
+
+    // Disable MUX1 and iterate through MUX2
     mux_disable(TOTAL_IC, MUX1_ADDRESS);
-    //Iterate through second mux
     for (uint8_t i = 0; i < MUX_CHANNELS; i++) {
 
         //Changing channel over I2C is going to be tricky
@@ -541,19 +541,23 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         o_ltc6811_adax(MD_7KHZ_3KHZ , AUX_CH_ALL); //start ADC measurement
         o_ltc6811_pollAdc(); //Wait on ADC measurement (Should be quick)
         error = o_ltc6811_rdaux(0,TOTAL_IC,aux_codes); //Parse ADC measurements
-        if (error > 0) {
-            return error;
-        }
-        if (i == 5) { //ignore the thermistor that is shorted low
-            aux_codes[3][0] = aux_codes[3][5] - 1;
-        }
+
         for (uint8_t j = 0; j < TOTAL_IC; j++) {
+            if ( (j==0 && i==1) ||
+                 (j==1 && i==1) ||
+                 (j==2) ||
+                 (j==6) )
+            {
+                continue;
+            }
+
+
             cell_temperatures[j][i*2 + 1] = aux_codes[j][0]; //Store temperatures
             uint32_t _cell_temp_mult = (uint32_t)(aux_codes[j][0]) * THERM_V_FRACTION;
             uint32_t _cell_ref_mult = (uint32_t)(aux_codes[j][5]) * 1000;
             if (_cell_temp_mult < _cell_ref_mult) {
                 FLAGS |= OVER_TEMP;
-                error += 1;
+                over_temp = 1;
             }
         }
     }
@@ -587,7 +591,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
     }
 
 
-    if (error == 0) {
+    if (over_temp == 0) {
         //upon successful execution clear flags
         FLAGS &= ~OVER_TEMP;
     }

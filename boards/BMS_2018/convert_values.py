@@ -35,19 +35,22 @@ if __name__ == "__main__":
         err = string[3]
         string = string[4:].split(',')
 
-        if kind == 't':
-            print("Temperatures: {} [{}] ".format(cell, err))
+        try:
+            if kind == 't':
+                print("Temperatures: {} [{}] ".format(cell, err))
 
-            for i in string[1:-1]:
-                val = voltage_to_temp(int(i))
-                print("{:.4}".format(-val), end=" ")
+                for i in string[1:-1]:
+                    val = voltage_to_temp(int(i))
+                    print("{:.4}".format(-val), end=" ")
 
-            print()
+                print()
 
-        elif kind == 'v':
-            print("Voltages: {} [{}] ".format(cell, err))
-            for i in string[1:]:
-                print(voltage_to_voltage(float(i)), end=" ")
+            elif kind == 'v':
+                print("Voltages: {} [{}] ".format(cell, err))
+                for i in string[1:]:
+                    print(voltage_to_voltage(float(i)), end=" ")
 
-            print()
+                print()
 
+        except:
+            pass
