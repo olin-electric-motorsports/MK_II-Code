@@ -30,7 +30,8 @@ macro (new_board)
         set (f_cpu 4000000UL)
     endif( NOT DEFINED ${F_CPU} )
 
-    set (CMAKE_C_FLAGS "-std=c99 -mmcu=${MCU} -g -Os -Wall -Wunused -Wl,-Map=${map_file} -lm -DF_CPU=${F_CPU}")
+    set (CMAKE_C_FLAGS "-std=c99 -mmcu=${MCU} -Os -fdce -fstack-usage -Wstack-usage=1024 -Wall -Wunused -Wl,-Map=${map_file} -lm -DF_CPU=${F_CPU}")
+    # set (CMAKE_C_FLAGS "-std=c99 -mmcu=${MCU} -Os -fdce -Wall -Wunused -Wl,-Map=${map_file} -lm -DF_CPU=${F_CPU}")
     set_target_properties (${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${elf_file})
 
     add_custom_target (

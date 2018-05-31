@@ -5,8 +5,6 @@
 uint8_t __LOG_UART_COMM;
 uint8_t __LOG_UART_DATA;
 
-char uart_buffer[1024]  = "";
-
 ISR(LIN_TC_vect) {
     // Check to see if we need the data
     if (bit_is_set(__LOG_UART_COMM, __LOG_NEED_DATA)) {
@@ -57,6 +55,14 @@ void LOG_println(char *data, uint8_t data_len) {
     LINDAT = 0xd;
 }
 
+void LOG_print(char *data, uint8_t data_len) {
+    // Send our data
+    for (int i=0; i < data_len; i++) {
+        loop_until_bit_is_clear(LINSIR, LBUSY);
+        LINDAT = (uint8_t) data[i];
+    }
+}
+
 uint8_t LOG_block_read(void) {
     // Set our "need data" bit so that the interrupt
     // knows to log data
@@ -69,3 +75,4 @@ uint8_t LOG_block_read(void) {
     // Return the data
     return __LOG_UART_DATA;
 }
+

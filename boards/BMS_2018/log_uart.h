@@ -1,8 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+
 /* How To Use:
  *
  * Connect UART bridge TX to the MCU's RX (PD4, or SCK_A)
@@ -43,8 +41,6 @@
  * ```
  */
 
-extern char uart_buffer[1024];
-
 /// Initialize Logging over UART at 6250 baud (given that your clkio is 4MHz)
 void LOG_init(void);
 
@@ -53,6 +49,7 @@ void LOG_chr(char data);
 
 /// Log a string of characters over UART. Note that you must pass the accurate length of characters.
 void LOG_println(char *data, uint8_t data_len);
+void LOG_print(char *data, uint8_t data_len);
 
 /// Wait for a character to be received over UART
 uint8_t LOG_block_read(void);
