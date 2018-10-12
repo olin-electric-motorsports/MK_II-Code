@@ -173,6 +173,7 @@ int main (void)
     CAN_transmit(0, 0x13, 8, test_msg);
 
 
+    PORTB |= _BV(PB2); //close relay
     while(1) {
 
         //PORTB &= ~(_BV(PROG_LED_1) | _BV(PROG_LED_2)); //Turn off status LEDs
@@ -184,6 +185,16 @@ int main (void)
         if (FLAGS & OPEN_SHDN) {
             PORTB &= ~_BV(PB2); //open relay
             EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            char msg[] = "Open Shutdown";
+            LOG_println(msg, strlen(msg));
+
+            char msg2[8] = "";
+            sprintf(msg2, "%x", FLAGS);
+            LOG_println(msg2, strlen(msg));
+        } else {
+            PORTB |= _BV(PB2); //close relay
+            char msg[] = "Close Shutdown";
+            LOG_println(msg, strlen(msg));
         }
 
         if (FLAGS & UNDER_VOLTAGE) { //Set LED D7, PB5
@@ -228,11 +239,13 @@ int main (void)
                 error_counter = 0; 
             }
 
+            /*
             if (read_all_temperatures() > 0) {
                 error_counter++;
             } else { 
                 error_counter = 0; 
             }
+            */
 
             if (error_counter > ERR_IN_ROW) {
                 FLAGS |= ERR_OVF;
@@ -389,7 +402,7 @@ void transmit_discharge_status(void)
             msg[2+k*2] = (uint8_t)disch_status;  //Low byte
         }
 
-        CAN_transmit(3, 0x15, 7, msg);
+        //CAN_transmit(3, 0x15, 7, msg);
         _delay_ms(5);
     }
 
