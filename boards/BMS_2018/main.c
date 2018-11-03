@@ -34,7 +34,7 @@ volatile uint8_t FLAGS = 0x00;
 #define MUX2_ADDRESS 0x48
 
 //LTC68xx defs
-#define TOTAL_IC 8
+#define TOTAL_IC 1
 
 #define ENABLED 1
 #define DISABLED 0
@@ -129,7 +129,7 @@ int main (void)
     PORTC &= ~(_BV(LED_ORANGE) | _BV(LED_GREEN) | _BV(PROG_LED_3));
 
     PORTB |= _BV(PB2); //close relay
-    EXT_LED_PORT |= _BV(LED_ORANGE);
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
 
     //Pin Change Interrupts
     PCICR |= _BV(PCIE0); //enable 0th mask register for interrupts
@@ -171,6 +171,11 @@ int main (void)
 
     uint8_t test_msg[8] =  {0,0,0,0,0,0,0,0};
     CAN_transmit(0, 0x13, 8, test_msg);
+
+    //just sanity check to confirm led is working
+    //EXT_LED_PORT |= _BV(LED_ORANGE);
+    //_delay_ms(1000);
+    //EXT_LED_PORT &= ~_BV(LED_ORANGE);
 
 
     PORTB |= _BV(PB2); //close relay
@@ -216,9 +221,9 @@ int main (void)
         }
 
         if (FLAGS & ERR_OVF){
-            EXT_LED_PORT |= _BV(LED_ORANGE);
+            //EXT_LED_PORT |= _BV(LED_ORANGE);
         } else {
-            EXT_LED_PORT &= ~_BV(LED_ORANGE);
+            //EXT_LED_PORT &= ~_BV(LED_ORANGE);
         }
 
         if (can_recv_msg[1] == 0x99){
@@ -231,18 +236,21 @@ int main (void)
             _delay_ms(5);
         }
 
+        //turn LED off at the start of each read so we can actually detect errors
+        EXT_LED_PORT &= ~_BV(LED_ORANGE);
         if (FLAGS & READ_VALS) {
             EXT_LED_PORT ^= _BV(LED_GREEN);
-            if (read_all_voltages() > 0) { // If we get over 3 sequential PEC errors, open SHDN
+            //LJ 5/30/18 changed following conditional to look for <0 errors temorarily to check for pec errors
+            if (read_all_voltages() < 0) { // If we get over 3 sequential PEC errors, open SHDN
                 error_counter++;
-            } else { 
-                error_counter = 0; 
+            } else {
+                error_counter = 0;
             }
 
             /*
             if (read_all_temperatures() > 0) {
                 error_counter++;
-            } else { 
+            } else {
                 error_counter = 0; 
             }
             */
@@ -437,9 +445,9 @@ void init_fan_pwm(uint8_t duty_cycle)
 
 //VOLTAGE MEASUREMENT///////////////////////////////////////////////////////////
 
-uint8_t read_all_voltages(void) // Start Cell ADC Measurement
+int8_t read_all_voltages(void) // Start Cell ADC Measurement
 {
-    uint8_t error = 0;
+    int8_t error = 0;
 
     // Set up ADC
     wakeup_sleep(TOTAL_IC);
@@ -453,7 +461,7 @@ uint8_t read_all_voltages(void) // Start Cell ADC Measurement
         char tmp_msg[108] = "";
         sprintf(tmp_msg, "v%d,%u,%u,%u,%u,%u,"
                          "%u,%u,%u,%u,"
-                         "%u,%u", 
+                         "%u,%u",
                           i,
                           error,
                           cell_codes[i][0],
@@ -527,7 +535,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
                  (j==4 && i==6) ||
                  (j==4 && i==8) ||
                  (j==6) ||
-                 (j==7 && i==0) ) 
+                 (j==7 && i==0) )
             {
                 continue;
             }
@@ -580,7 +588,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
         sprintf(tmp_msg, "t%d,%u,", i, error);
         LOG_print(tmp_msg, strlen(tmp_msg));
 
-        sprintf(tmp_msg, "%u,%u,%u,%u,", 
+        sprintf(tmp_msg, "%u,%u,%u,%u,",
                 cell_temperatures[i][0],
                 cell_temperatures[i][1],
                 cell_temperatures[i][2],
@@ -588,7 +596,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
                 );
         LOG_print(tmp_msg, strlen(tmp_msg));
 
-        sprintf(tmp_msg, "%u,%u,%u,%u,", 
+        sprintf(tmp_msg, "%u,%u,%u,%u,",
                 cell_temperatures[i][4],
                 cell_temperatures[i][5],
                 cell_temperatures[i][6],
@@ -596,7 +604,7 @@ uint8_t read_all_temperatures(void) // Start thermistor ADC Measurement
                 );
         LOG_print(tmp_msg, strlen(tmp_msg));
 
-        sprintf(tmp_msg, "%u,%u", 
+        sprintf(tmp_msg, "%u,%u",
                 cell_temperatures[i][4],
                 cell_temperatures[i][5]
                 );
@@ -812,7 +820,7 @@ void o_ltc6811_wrcfg(uint8_t total_ic, //The number of ICs being written to
     // Executes for each ltc6811 in daisy chain, this loops starts with
     // the last IC on the stack. The first configuration written is
     // received by the last IC in the daisy chain
-    for (uint8_t current_ic = total_ic; current_ic > 0; current_ic--)       
+    for (uint8_t current_ic = total_ic; current_ic > 0; current_ic--)
     {
 
         // executes for each of the 6 bytes in the CFGR register
@@ -939,7 +947,7 @@ void o_ltc6811_adcv(
 /*
  * Reads and parses the ltc6811 cell voltage registers.
  */
-uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
+int8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is read back.
         uint8_t total_ic, // the number of ICs in the system
         uint16_t cell_codes[][CELL_CHANNELS] // Array of the parsed cell codes
         )
@@ -953,7 +961,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
     uint16_t parsed_cell;
     uint16_t received_pec;
     uint16_t data_pec;
-    uint8_t data_counter = 0; 
+    uint8_t data_counter = 0;
     uint8_t cell_data[NUM_RX_BYT * TOTAL_IC * sizeof(uint8_t)];
 
     // TODO: Why do we have a different case for the 0th reg?
@@ -1002,7 +1010,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
                 }
 
                 //Because the transmitted PEC code is 2 bytes long the data_counter
-                //must be incremented by 2 bytes to point to the next ICs cell 
+                //must be incremented by 2 bytes to point to the next ICs cell
                 //voltage data
                 data_counter=data_counter+2;
             }
@@ -1022,7 +1030,7 @@ uint8_t o_ltc6811_rdcv(uint8_t reg, // Controls which cell voltage register is r
             // loops once for each of the 3 cell voltage codes in the register
             for (uint8_t current_cell = 0; current_cell < CELL_IN_REG; current_cell++)
             {
-    
+
                 // Each cell code is received as two bytes and is combined to
                 // create the parsed cell voltage code
                 parsed_cell = cell_data[data_counter] + (cell_data[data_counter+1]<<8);
@@ -1498,7 +1506,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
                     comm[0][transmitted_bytes + 1] = \
                         (data[data_counter] << 4) | NACK;
                 }
-                else 
+                else
                 {
                     comm[0][transmitted_bytes+1] = (data[data_counter] << 4) | NACK_STOP;
                 }
@@ -1521,7 +1529,7 @@ void write_i2c(uint8_t total_ic, uint8_t address, uint8_t command, uint8_t *data
             stcomm();
         }
         // don't need to pad because we have a multiple of 3 data bytes
-        else                                      
+        else
         {
             for (uint8_t k=0; k<3; k++)
             {
